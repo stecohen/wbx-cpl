@@ -1,0 +1,6 @@
+dist/
+*.sh
+test/
+.DS_Store
+__pycache__/
+requirements.txt

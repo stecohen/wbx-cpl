@@ -1,0 +1,32 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "wbx_cpl"
+version = "1.0.0"
+description = "Commands for Webex compliance officers"
+readme = "README.md"
+authors = [{ name = "Stephane Cohen", email = "stecohen@gmail.com" }]
+license = { file = "LICENSE" }
+classifiers = [
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python",
+    "Programming Language :: Python :: 3",
+]
+keywords = ["Webex", "Control Hub", "groups"]
+requires-python = ">=3.10"
+dependencies = [
+  click==8.1.7,
+  pandas==2.1.4,
+  Requests==2.31.0,
+]
+repository = "https://github.com/stecohen/wbx-cpl"
+
+[project.optional-dependencies]
+
+[project.urls]
+
+[project.scripts]
+
+

@@ -22,21 +22,26 @@ Commands:
 
 # Examples:
 ```
-# list messages sent by a user (default from = 30 days ago, default to = today)
-python -m wbx_cpl user-messages user1@customer.com 
+# list user sent messages 
+python3 -m wbx_cpl user-messages bc@cust1.onmicrosoft.com 
 
-# list messages sent by a user and save in CSV file  
-python -m wbx_cpl -c msgs.csv user-messages user1@customer.com 
+# list up to 5 user sent messages with space title (longer processing time) 
+python3 -m wbx_cpl user-messages -t -f {"max":5} bc@cust1.onmicrosoft.com 
 
-# list messages sent by user between <from> and <to> dates  
-python3 -m wbx_cpl user-messages -f '{"from":"2022-10-20T00:00:00.000Z", "to":"2023-10-20T00:00:00.000Z" }' user1@customer.com 
+# list user messages and save to file 
+python3 -m wbx_cpl user-messages -c /tmp/messages.csv bc@cust1.onmicrosoft.com 
 
-# list messages in a space, limit to 5 messages per user  
-python3 -m wbx_cpl space-messages -f '{"max":5}' <spaceid>
+# list user messages with tilte and save to file 
+python3 -m wbx_cpl user-messages -c /tmp/messagesTitles.csv -t -f {"max":5} bc@cust1.onmicrosoft.com 
 
-# list members of a space
-python3 -m wbx_cpl space-members  list-space-members <spaceid>
+# list messages in space and save to file, up to 5 messages per user 
+python3 -m wbx_cpl space-messages -c /tmp/spacemessages.csv -f {"max":5}  
 
+# list all users in a in space, save to file 
+python3 -m wbx_cpl space-members -c /tmp/members.csv <spaceid> 
+
+# Download files attached to message id, save files under /tmp 
+python3 -m wbx_cpl download-msg-files -d /tmp/ <spacid>
 ```
 
 ## Notes:

@@ -1,6 +1,5 @@
 #!/usr/local/bin/python
 
-import csv
 import requests
 import os
 import json
@@ -238,13 +237,13 @@ def extract_membership_csv(members, csvFile):
 # optional parameters passed as json string like '{"max":1000}'
 # 
 @click.command()
-@click.option('-f', '--filter', help='json string for filtering events search. Eg "max":1')
-@click.option('-t', '--title', is_flag=True, show_default=True, default=False, help='Adds room title column (requires additonal processing)')
-@click.option('-c', '--csvdest', help='save results to CSV file')
+@click.option('-f', '--filter', help='JSON string to filter events search e.g. {"from":"2023-12-31T00:00:00.000Z", "max":1}.')
+@click.option('-t', '--title', is_flag=True, show_default=True, default=False, help='Add room title column (requires additonal processing).')
+@click.option('-c', '--csvfile', help='Save results to CSV file.')
 @click.argument('email')
-def user_messages(email, title, filter, csvdest):
-    """List messages sent by given user email, up to 1000 messages. """
-    
+def user_messages(email, title, filter, csvfile):
+    """List (up to 1000) messages sent by given user email. Use the filter option to limit the search if needed."""
+    #
     # initialise pandas data frame 
     msgdf=msgsDF(title, False)
     if filter :
@@ -253,19 +252,21 @@ def user_messages(email, title, filter, csvdest):
         except:
             ut.trace(1, f"error {filter} not in valid JSON format")
             return(-1)
-        
+    # get data   
     ut.trace(3, f"got params {email}. Calling get_user_msgs {email} {filter}")
     d=get_user_msgs(email, filter)
     if d:
         df=msgdf.add_msgs(email, d, title, False)
-        print_user_msgs(df, csvdest)
+        print_user_msgs(df, csvfile)
+    else:
+        ut.trace(2, "No messages from {email}")
 
 @click.command()
 @click.argument('spaceId')
-@click.option('-f', '--filter', help='json string for filtering events search for each user. Eg {"max":1}')
-@click.option('-c', '--csvdest', help='destination file name')
-def space_messages(spaceid, filter, csvdest):
-    """list messages in given space id """
+@click.option('-f', '--filter', help='JSON string to filter events search e.g. {"from":"2023-12-31T00:00:00.000Z", "max":1}.')
+@click.option('-c', '--csvfile', help='Save results to CSV file.')
+def space_messages(spaceid, filter, csvfile):
+    """List messages in given space ID. Limited to 1000 per user."""
     #
     # init
     ut.trace(3, locals())
@@ -293,7 +294,7 @@ def space_messages(spaceid, filter, csvdest):
             else:
                 ut.trace(3, f"{ue} not found")
         # print
-        print_space_msgs(df, csvdest)
+        print_space_msgs(df, csvfile)
     else:
         ut.trace(3, f"no membership data for {spaceid}")
 
@@ -303,9 +304,9 @@ def space_messages(spaceid, filter, csvdest):
 # 
 @click.command()
 @click.argument('spaceId') 
-@click.option('-c', '--csvFile', help='CSV file destination.')
+@click.option('-c', '--csvfile', help='Save results to CSV file.')
 def space_members(spaceid, csvfile):
-    """List emails of members in given space ID"""
+    """List emails of members in given space ID."""
     data = wbxr.get_space_memberships(spaceid)
     extract_membership_csv(data, csvfile)
 
@@ -313,20 +314,21 @@ def space_members(spaceid, csvfile):
 #
 @click.command()
 @click.argument('msgId') 
-def download_msg_files(msgid):
-    """Download files attached to given message ID"""
+@click.option('-d', '--dir', default="", help='directory name to downlaad to.')
+def download_msg_files(msgid, dir):
+    """Download files attached to given message ID. Files will be downloaded in current directoty by default."""
     msg = wbxr.get_wbx_data(f"messages/{msgid}")
     if 'files' in msg:
         files=msg['files']
         for f in files:
-            wbxr.download_contents(f)
+            wbxr.download_contents(f, dir)
     else:
         ut.trace(1, f"no attachments found in msg {msgid}")
 
 @click.group()
 @click.version_option(__version__)
-@click.option('-t', '--token', help='Your access token. Read from AUTH_BEARER env variable by default.')
-@click.option('-d', '--debug', default=2, help='debug level.')
+@click.option('-t', '--token', help='Your access token. AUTH_BEARER env variable by default. You can find your personal token at https://developer.webex.com/docs/getting-started.')
+@click.option('-d', '--debug', default=2, help='Debug level.')
 def cli(debug, token):
     ut.setDebugLevel(debug)
     if (debug >=3 ):

@@ -150,7 +150,7 @@ class WbxRequest:
 
     # download url contents   
     # 
-    def download_contents(self, url):
+    def download_contents(self, url, dir=""):
         hds=self.req_head(url)
         if ('Content-Disposition' in hds ):
             cd=hds['Content-Disposition'] 
@@ -159,9 +159,9 @@ class WbxRequest:
             if file_name:
                 try:    
                     with requests.get(url, headers=self.spark_header) as r:
-                        with open(file_name, mode="wb") as f:
+                        with open(dir+file_name, mode="wb") as f:
                             f.write(r.content)
-                            print(f"{file_name} downloaded.")
+                            print(f"{dir}{file_name} downloaded.")
                 except:
                     self.ut.trace(1, f"Error downloading {url}")
             else:

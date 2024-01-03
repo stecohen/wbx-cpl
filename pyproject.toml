@@ -3,7 +3,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "wbx_cpl"
+name = "wbx-cpl"
 version = "1.1.1"
 description = "Commands for Webex Compliance Officers"
 readme = "README.md"

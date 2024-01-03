@@ -1,4 +1,4 @@
-import utils
+import wbx_cpl.utils as utils
 import requests
 import re
 

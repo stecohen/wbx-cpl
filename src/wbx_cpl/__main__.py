@@ -14,11 +14,13 @@ import pandas as pd
 pd.set_option('display.max_colwidth', 80)
 import click
 
-import utils 
-import wbx 
+import wbx_cpl.utils
+import wbx_cpl.msgsData
+import wbx_cpl.wbx
 
-ut=utils.UtilsTrc()
-wbxr=wbx.WbxRequest(ut)
+ut=wbx_cpl.utils.UtilsTrc()
+wbxr=wbx_cpl.wbx.WbxRequest(ut)
+
 if ( 'AUTH_BEARER' in os.environ ):
     wbxr.set_token( os.environ['AUTH_BEARER'] )
 
@@ -236,12 +238,12 @@ def extract_membership_csv(members, csvFile):
 # optional parameters passed as json string like '{"max":1000}'
 # 
 @click.command()
-@click.option('-f', '--filter', help='json string for filtering events search. Eg "max":1 ')
+@click.option('-f', '--filter', help='json string for filtering events search. Eg "max":1')
 @click.option('-t', '--title', is_flag=True, show_default=True, default=False, help='Adds room title column (requires additonal processing)')
-@click.option('-c', '--csvdest', help='destination file name')
+@click.option('-c', '--csvdest', help='save results to CSV file')
 @click.argument('email')
 def user_messages(email, title, filter, csvdest):
-    """ list messages sent by given user email. """
+    """List messages sent by given user email, up to 1000 messages. """
     
     # initialise pandas data frame 
     msgdf=msgsDF(title, False)
@@ -263,7 +265,7 @@ def user_messages(email, title, filter, csvdest):
 @click.option('-f', '--filter', help='json string for filtering events search for each user. Eg {"max":1}')
 @click.option('-c', '--csvdest', help='destination file name')
 def space_messages(spaceid, filter, csvdest):
-    """list messages in by given space id """
+    """list messages in given space id """
     #
     # init
     ut.trace(3, locals())
@@ -303,7 +305,7 @@ def space_messages(spaceid, filter, csvdest):
 @click.argument('spaceId') 
 @click.option('-c', '--csvFile', help='CSV file destination.')
 def space_members(spaceid, csvfile):
-    """ list emails of members in given space Id. """
+    """List emails of members in given space ID"""
     data = wbxr.get_space_memberships(spaceid)
     extract_membership_csv(data, csvfile)
 
@@ -312,7 +314,7 @@ def space_members(spaceid, csvfile):
 @click.command()
 @click.argument('msgId') 
 def download_msg_files(msgid):
-    """ Download files attached to given message id. """
+    """Download files attached to given message ID"""
     msg = wbxr.get_wbx_data(f"messages/{msgid}")
     if 'files' in msg:
         files=msg['files']
@@ -322,6 +324,7 @@ def download_msg_files(msgid):
         ut.trace(1, f"no attachments found in msg {msgid}")
 
 @click.group()
+@click.version_option(__version__)
 @click.option('-t', '--token', help='Your access token. Read from AUTH_BEARER env variable by default.')
 @click.option('-d', '--debug', default=2, help='debug level.')
 def cli(debug, token):

@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "wbx-cpl"
-version = "1.1.1"
+version = "1.1.2"
 description = "Commands for Webex Compliance Officers"
 readme = "README.md"
 authors = [{ name = "Stephane Cohen", email = "stecohen@gmail.com" }]

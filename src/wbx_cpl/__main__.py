@@ -83,6 +83,11 @@ class msgsDF:
         if IsSpace:
             mycols=self.cols_space
         #
+        # error protection 
+        if 'items' not in msgs:
+            ut.trace (2, f"no messages in " + str(msg))
+            return
+        #
         # iterate messages
         for item in msgs['items']:
             msg=item['data']

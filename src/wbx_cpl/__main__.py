@@ -208,6 +208,7 @@ def print_user_msgs(df, csvdest):
 #
 def print_space_msgs(df, csvdest):
     df = df.astype({'fileCount': 'int'})
+    df = df.sort_values(by=['created'])
     print(df.loc[:, ~df.columns.isin(['id', 'files', 'fileNames'])])
     if csvdest:
         df.to_csv(csvdest, index=False)

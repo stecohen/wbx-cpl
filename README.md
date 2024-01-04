@@ -1,4 +1,4 @@
-# Commands utilies for Webex Compliance Officers
+## Commands utilities for Webex Compliance Officers
 
 ## Usage:
 ```

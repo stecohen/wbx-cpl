@@ -58,7 +58,6 @@ def print_items(il, items):
 ## Comp Officer stuff 
 ################
 
-
 # extracts file name from content disposition header field 
 def extract_file_name(cd):
     name=re.findall('filename="(.+)"', cd)[0]
@@ -77,19 +76,28 @@ class msgsDF:
             mycols['title']=[]
         self.df = pd.DataFrame(mycols)
         
-    def add_msgs(self, ue, msgs, add_title=False, IsSpace=False):
+    def add_msgs(self, ue, cr_msgs, dl_msgs, add_title=False, IsSpace=False):
 
         mycols=self.cols_user
         if IsSpace:
             mycols=self.cols_space
         #
         # error protection 
-        if 'items' not in msgs:
+        if 'items' not in cr_msgs:
             ut.trace (2, f"no messages in " + str(msg))
             return
+        
         #
-        # iterate messages
-        for item in msgs['items']:
+        # iterate deleted messages and store in dl_msgs_d
+        dl_msgs_d={}
+        if 'items' in dl_msgs:
+            for item in dl_msgs['items']:
+                msg=item['data']
+                dl_msgs_d[msg['id']]=msg
+
+        #
+        # iterate created messages
+        for item in cr_msgs['items']:
             msg=item['data']
             title="N/A"
             ut.trace (3, f"got message: " + str(msg))
@@ -99,6 +107,13 @@ class msgsDF:
             for i in mycols:
                 if i in msg:
                     new_row[i]=msg[i]
+
+            # add deleted date info
+            #
+            new_row['deleted']='N'
+            if dl_msgs_d.get(new_row['id']):
+                new_row['deleted']='Y'
+
             #
             # add sender         
             new_row['sentBy']=ue
@@ -156,7 +171,7 @@ def get_other_person_membership(roomId, uid):
                 return(item)
     return({})
 
-# get messages obj for given user email 
+# returns created and deleted messages objs for given user email 
 # optional parameters passed as json string like '{"max":1000}'
 # returns empty obj if not found
 # 
@@ -181,12 +196,21 @@ def get_user_msgs(ue, user_opts=""):
 
         # construct url parameter string
         #
-        params=f"?resource=messages&actorId={uid}"
+        params=f"?resource=messages&actorId={uid}&"
         for k in opts:
             params=f"{params}&{k}={opts[k]}"
-        ut.trace (3, f"params = {params}")
-        d=wbxr.get_events(params)
-        return(d)
+        ut.trace (3, f"searching created msgs params = {params}")
+        created=wbxr.get_events(params)
+
+        # now search for deleted messages so we can mark them as such
+        #
+        params=f"?resource=messages&actorId={uid}&type=deleted"
+        for k in opts:
+            params=f"{params}&{k}={opts[k]}"
+        ut.trace (3, f"searching deleted msgs params = {params}")
+        deleted=wbxr.get_events(params)
+
+        return(created, deleted)
 
     else:
         ut.trace(1, f"cannot find user {ue}")
@@ -260,9 +284,9 @@ def user_messages(email, title, filter, csvfile):
             return(-1)
     # get data   
     ut.trace(3, f"got params {email}. Calling get_user_msgs {email} {filter}")
-    d=get_user_msgs(email, filter)
-    if d:
-        df=msgdf.add_msgs(email, d, title, False)
+    (c,d)=get_user_msgs(email, filter)
+    if c:
+        df=msgdf.add_msgs(email, c, d, title, False)
         print_user_msgs(df, csvfile)
     else:
         ut.trace(2, "No messages from {email}")
@@ -294,9 +318,8 @@ def space_messages(spaceid, filter, csvfile):
             uid = wbxr.get_user_id(ue)
             ut.trace(3, f"processing user {ue}")
             if (uid):
-                msgs=get_user_msgs(ue, filter)
-                ut.trace(3, f"got {str(msgs)[:100]}...")
-                df=msgdf.add_msgs(ue, msgs, False, True)
+                (c, d)=get_user_msgs(ue, filter)
+                df=msgdf.add_msgs(ue, c, d, False, True)
             else:
                 ut.trace(3, f"{ue} not found")
         # print

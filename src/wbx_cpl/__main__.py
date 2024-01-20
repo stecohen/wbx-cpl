@@ -12,6 +12,7 @@ import inspect
 import pandas as pd 
 pd.set_option('display.max_colwidth', 80)
 import click
+from pprint import pprint
 
 import wbx_cpl.utils
 import wbx_cpl.msgsData
@@ -33,7 +34,7 @@ except:
 logging.basicConfig()
 
 NOW = datetime.datetime.now()
-UTCNOW = NOW.isoformat() + 'Z'
+UTCNOW = NOW.isoformat(timespec='milliseconds') + 'Z'
 
 ###################
 ### UTILS functions 
@@ -157,7 +158,37 @@ class msgsDF:
                 self.df = pd.concat([self.df, pd.DataFrame([new_row])], ignore_index=True)
             #
         return(self.df)
+  
+
+class recordingsDF:
+
+    cols = {'id':[],'topic':[],'createTime':[], 'hostEmail':[], 'playbackUrl':[],'durationSeconds':[], 'playbackUrl':[]}
     
+    def __init__(self):
+        mycols=self.cols
+        self.df = pd.DataFrame(mycols)
+        
+    def add_recs(self, recordings):
+        mycols=self.cols
+        #
+        # error protection 
+        if 'items' not in recordings:
+            ut.trace (2, f"no recordings in " + str(recordings))
+            return
+        #
+        # iterate recordings 
+        for rec in recordings['items']:
+            ut.trace (3, f"got rec: " + str(rec))
+            # new row 
+            new_row={}
+            for i in mycols:
+                if i in rec:
+                    new_row[i]=rec[i]
+            # store in DF
+            self.df = pd.concat([self.df, pd.DataFrame([new_row])], ignore_index=True)
+        # return DF
+        return(self.df)
+  
 
 # get the 'other' (apart from given 'uid') person membership in a direct 1:1 space
 # 
@@ -179,7 +210,7 @@ def get_user_msgs(ue, user_opts=""):
 
     uid = wbxr.get_user_id(ue, True)
     frm = datetime.datetime.now() - datetime.timedelta(30)
-    utcFrm=frm.isoformat() + 'Z'
+    utcFrm=frm.isoformat(timespec='milliseconds') + 'Z'
     to = UTCNOW
     opts = {'max': 100,'from':utcFrm,'to':to}
 
@@ -189,6 +220,8 @@ def get_user_msgs(ue, user_opts=""):
         if (user_opts):
             try:
                 userOpts=json.loads(user_opts)
+                if ( userOpts.get('from') or userOpts.get('to') ) : # erase time defaults 
+                    opts = {'max': 100}
                 for k in userOpts:
                     opts[k]=userOpts[k]
             except:
@@ -234,6 +267,16 @@ def print_space_msgs(df, csvdest):
     df = df.astype({'fileCount': 'int'})
     df = df.sort_values(by=['created'])
     print(df.loc[:, ~df.columns.isin(['id', 'files', 'fileNames'])])
+    if csvdest:
+        df.to_csv(csvdest, index=False)
+        ut.trace(2, f"{csvdest} written.")
+
+
+# print to screen and file if option on 
+#
+def print_recordings(df, csvdest):
+    df = df.sort_values(by=['createTime'])
+    print(df.loc[:, ~df.columns.isin(['playbackUrl'])])
     if csvdest:
         df.to_csv(csvdest, index=False)
         ut.trace(2, f"{csvdest} written.")
@@ -290,6 +333,7 @@ def user_messages(email, title, filter, csvfile):
         print_user_msgs(df, csvfile)
     else:
         ut.trace(2, "No messages from {email}")
+
 
 @click.command()
 @click.argument('spaceId')
@@ -354,6 +398,68 @@ def download_msg_files(msgid, dir):
     else:
         ut.trace(1, f"no attachments found in msg {msgid}")
 
+
+# list recordings  
+#
+@click.command()
+@click.argument('site') 
+@click.option('-c', '--csvfile', help='Save results to CSV file.')
+@click.option('-f', '--filter', help='JSON string to filter events search e.g. {"from":"2023-12-31T00:00:00.000Z", "max":1}.')
+def list_recordings(site, csvfile, filter):
+    """List recordings for given webex site"""
+    #
+    # defaults options
+    #
+    frm = datetime.datetime.now() - datetime.timedelta(30)
+    utcFrm=frm.isoformat(timespec='milliseconds') + 'Z'
+    to = UTCNOW
+    opts = {'max': 100,'from':utcFrm,'to':to}
+
+    # override default options w/ user options
+    #
+    if (filter):
+        try:
+            userOpts=json.loads(filter)
+            if ( userOpts.get('from') or userOpts.get('to') ) : # erase time defaults 
+                opts = {'max': 100}
+            for k in userOpts:
+                opts[k]=userOpts[k]
+        except:
+            ut.trace(1, f"error parsing {filter} not a valid JSON format")
+        
+
+    
+    # construct url parameter string
+    #
+    params=f"siteUrl={site}"
+    for k in opts:
+        params=f"{params}&{k}={opts[k]}"
+
+    # get recording data
+    #
+    data = wbxr.get_wbx_data(f"admin/recordings?{params}")
+
+    # store in panda DF and print
+    #
+    df=recordingsDF()
+    items=data.get('items')
+    if (items):
+        df=df.add_recs(data)
+        print_recordings(df, csvfile)
+    else:
+        ut.trace(1, f"no recordings found.")
+
+
+# get recording details
+#
+@click.command()
+@click.argument('id') 
+def get_recording(id):
+    """Print detais of given recording ID."""
+    data = wbxr.get_wbx_data(f"recordings/{id}")
+    pprint(data, depth=2, indent=4)
+    
+
 @click.group()
 @click.version_option(__version__)
 @click.option('-t', '--token', help='Your access token. AUTH_BEARER env variable by default. You can find your personal token at https://developer.webex.com/docs/getting-started.')
@@ -366,11 +472,15 @@ def cli(debug, token):
         requests_log.setLevel(logging.DEBUG)
     if (token):
         wbxr.set_token( token )
-    
+
+
 cli.add_command(download_msg_files)
 cli.add_command(space_messages) 
 cli.add_command(user_messages) 
 cli.add_command(space_members) 
+cli.add_command(list_recordings) 
+cli.add_command(get_recording)
+
 
 if __name__ == '__main__':
     cli()

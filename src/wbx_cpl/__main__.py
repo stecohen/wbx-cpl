@@ -326,7 +326,7 @@ def user_messages(email, title, filter, csvfile):
             ut.trace(1, f"error {filter} not in valid JSON format")
             return(-1)
     # get data   
-    ut.trace(3, f"got params {email}. Calling get_user_msgs {email} {filter}")
+    ut.trace(3, f"got params {email} {filter}")
     (c,d)=get_user_msgs(email, filter)
     if c:
         df=msgdf.add_msgs(email, c, d, title, False)
@@ -405,7 +405,7 @@ def download_msg_files(msgid, dir):
 @click.argument('site') 
 @click.option('-c', '--csvfile', help='Save results to CSV file.')
 @click.option('-f', '--filter', help='JSON string to filter events search e.g. {"from":"2023-12-31T00:00:00.000Z", "max":1}.')
-def list_recordings(site, csvfile, filter):
+def recordings(site, csvfile, filter):
     """List recordings for given webex site"""
     #
     # defaults options
@@ -454,7 +454,7 @@ def list_recordings(site, csvfile, filter):
 #
 @click.command()
 @click.argument('id') 
-def get_recording(id):
+def recording_details(id):
     """Print detais of given recording ID."""
     data = wbxr.get_wbx_data(f"recordings/{id}")
     pprint(data, depth=2, indent=4)
@@ -478,9 +478,8 @@ cli.add_command(download_msg_files)
 cli.add_command(space_messages) 
 cli.add_command(user_messages) 
 cli.add_command(space_members) 
-cli.add_command(list_recordings) 
-cli.add_command(get_recording)
-
+cli.add_command(recordings) 
+cli.add_command(recording_details)
 
 if __name__ == '__main__':
     cli()

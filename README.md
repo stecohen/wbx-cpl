@@ -22,20 +22,27 @@ Commands:
 
 # Examples:
 ```
+
+# List recordings 
+python3 -m wbx_cpl  recordings -c /tmp/recs.csv -f '{"from":"2024-01-15T00:00:00.000Z","max":1}' sandbox.webex.com
+
+# get recording details
+python3 -m wbx_cpl  recording-details 34d9c6fdcaab453f8b540643e04b0830
+
 # list user sent messages 
 python3 -m wbx_cpl user-messages bc@cust1.onmicrosoft.com 
 
 # list up to 5 user sent messages with space title (longer processing time) 
-python3 -m wbx_cpl user-messages -t -f {"max":5} bc@cust1.onmicrosoft.com 
+python3 -m wbx_cpl user-messages -t -f '{"max":5}' bc@cust1.onmicrosoft.com 
 
 # list user messages and save to file 
 python3 -m wbx_cpl user-messages -c /tmp/messages.csv bc@cust1.onmicrosoft.com 
 
 # list user messages with tilte and save to file 
-python3 -m wbx_cpl user-messages -c /tmp/messagesTitles.csv -t -f {"max":5} bc@cust1.onmicrosoft.com 
+python3 -m wbx_cpl user-messages -c /tmp/messagesTitles.csv -t -f '{"max":5}' bc@cust1.onmicrosoft.com 
 
 # list messages in space and save to file, up to 5 messages per user 
-python3 -m wbx_cpl space-messages -c /tmp/spacemessages.csv -f {"max":5}  
+python3 -m wbx_cpl space-messages -c /tmp/spacemessages.csv -f '{"max":5}'  
 
 # list all users in a in space, save to file 
 python3 -m wbx_cpl space-members -c /tmp/members.csv <spaceid> 

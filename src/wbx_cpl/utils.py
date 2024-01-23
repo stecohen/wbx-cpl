@@ -1,18 +1,16 @@
 import inspect
 import re
 
+DEBUG_LEVEL=2
+
 class UtilsTrc:
     def __init__ (self):
         pass
-    
-    def setDebugLevel(self, deb):
-        self.debug_lev = deb
 
     def trace(self, lev, msg):
         caller = inspect.stack()[1][3]
-        if ( self.debug_lev >= lev ):
+        if ( DEBUG_LEVEL >= lev ):
             print(f"{caller}: {msg}")
-
 
 def is_email_format(id):
     m = re.search(".+@.+[.].+$", id)

@@ -1,47 +1,64 @@
 import wbx_cpl.utils as utils
+import datetime 
+from datetime import timezone
 import requests
+import json
 import re
+
+ut=utils.UtilsTrc()
+
+# move this to wbx.py
+now = datetime.datetime.now(timezone.utc)
+nowiso = now.isoformat(timespec='milliseconds')
+UTCNOW = re.sub('\+.+','', nowiso) + 'Z' # remove the tz suffix 
+
+ACCESS_TOKEN=""
 
 class WbxRequest:
 
-    accessToken = ""
-    spark_header = {}
-
-    def __init__(self, ut) -> None:
-        self.ut = ut
+    def __init__(self) :
+        pass
 
     def set_token(self, tok):
-        self.accessToken=tok
-        self.spark_header = {'Authorization': f"Bearer {tok}", 'Content-Type': 'application/json; charset=utf-8'}
+        ACCESS_TOKEN=tok
+        ut.trace(3, f"Setting access token {ACCESS_TOKEN}")
 
     #sets the header to be used for authentication and data format to be sent.
     def setHeaders(self):
-        spark_header = {'Authorization': f"Bearer {self.accessToken}", 'Content-Type': 'application/json; charset=utf-8'}
+        ut.trace(3, f"access token is {ACCESS_TOKEN}")
+        spark_header = {'Authorization': f"Bearer {ACCESS_TOKEN}", 'Content-Type': 'application/json; charset=utf-8'}
+        return(spark_header)
+
+    # extracts file name from content disposition header field 
+    def extract_file_name(self, cd):
+        name=re.findall('filename="(.+)"', cd)[0]
+        return(name)
 
     # generic get data 
     # returns {} if not happy  
     #
     def get_wbx_data(self, ep, params="", ignore_error=False):
         url = "https://webexapis.com/v1/" + ep + params
-        self.ut.trace(3, f"{url} ")
+        ut.trace(3, f"{url} ")
         try:
-            r = requests.get(url, headers=self.spark_header)
+            r = requests.get(url, headers=self.setHeaders())
             s = r.status_code
             if (s == 200):
                 d = r.json()
-                self.ut.trace(3, f"success")  
+                ut.trace(3, f"success")  
                 return(d)
             else:
-                not ignore_error and self.ut.trace(1,f"error {url} {s}: {r.reason}")  
+                not ignore_error and ut.trace(1,f"error {url} {s}: {r.reason} header={self.spark_header}")  
                 return({})
         except requests.exceptions.RequestException as e:
-            self.ut.trace(1, f"error {e}")
+            ut.trace(1, f"error {e} header={self.spark_header}")
+
 
     # returns user data json 
     # returns "" if not found or some error   
     #
     def get_user_details(self, email_or_uid): 
-        self.ut.trace (3, f"processing user {email_or_uid}")  
+        ut.trace (3, f"processing user {email_or_uid}")  
 
         if ( utils.is_email_format(email_or_uid)):
             uid = self.get_user_id(email_or_uid)
@@ -51,13 +68,13 @@ class WbxRequest:
             uid=email_or_uid
 
         url=f"https://webexapis.com/v1/people/{uid}"
-        r = requests.request("GET", url, headers=self.spark_header)
+        r = requests.request("GET", url, headers=self.setHeaders())
         s = r.status_code
         if s == 200 :
-            self.ut.trace(3,f"found {uid}")
+            ut.trace(3,f"found {uid}")
             return(r.json())
         else:
-            self.ut.trace(1,f"did not find {uid}")
+            ut.trace(1,f"did not find {uid}")
             return("")
 
     
@@ -70,83 +87,83 @@ class WbxRequest:
         # get_user_url=urllib.parse.quote("https://webexapis.com/v1/people?email=" + ue)
         get_user_url="https://webexapis.com/v1/people?email=" +ue
 
-        self.ut.trace (3, f"calling {get_user_url}")  
+        ut.trace (3, f"calling {get_user_url} T = {ACCESS_TOKEN}")  
         # send GET request and do not verify SSL certificate for simplicity of this example
-        r = requests.get(get_user_url, headers=self.spark_header, verify=True)
+        r = requests.get(get_user_url, headers=self.setHeaders(), verify=True)
         s = r.status_code
         if s == 200 :
             j = r.json()
             if ( len(j["items"]) == 0 ):
-                not ignore_error and self.ut.trace (1, f"user email {ue} not found")
+                not ignore_error and ut.trace (1, f"user email {ue} not found")
                 return("")
             else:
                 if ( len(j["items"]) > 1 ):
-                    self.ut.trace(1, f"Error found more than one match for user {ue}")
+                    ut.trace(1, f"Error found more than one match for user {ue}")
                     return(-2)
                 if ( len(j["items"]) == 1 ):
                     u = j["items"][0]
-                    self.ut.trace (3,f"email {ue} found {u['id']} ")
+                    ut.trace (3,f"email {ue} found {u['id']} ")
                     return(u['id'])     
         elif s == 404:
-            not ignore_error and self.ut.trace(1,f"got error {s}: {r.reason}")  
+            not ignore_error and ut.trace(1,f"got error {s}: {r.reason}")  
             return("")
         else :
-            self.ut.trace(1,f"got error {s}: {r.reason}")  
+            ut.trace(1,f"got error {s}: {r.reason}")  
             return("")
         
     # generic head request  
     # 
     def req_head(self, url):
-        self.ut.trace(3, f"{url} ")
+        ut.trace(3, f"{url} ")
         try:
-            r = requests.head(url, headers=self.spark_header)
+            r = requests.head(url, headers=self.setHeaders())
             s = r.status_code
             if (s == 200):
                 d = r.headers
-                self.ut.trace(3, f"success")  
+                ut.trace(3, f"success")  
                 return(d)
             else:
-                self.ut.trace(1,f"error {s}: {r.reason}")
+                ut.trace(1,f"error {s}: {r.reason}")
                 return({})
         except requests.exceptions.RequestException as e:
-            self.uttrace(1, f"error {e}")
+            ut.trace(1, f"error {e}")
             return({})
 
     # generic events API 
     # 
     def get_events(self, opts):
         url=f"https://webexapis.com/v1/events{opts}"
-        self.ut.trace(3, f"{url} ")
+        ut.trace(3, f"{url} ")
         try:
-            r = requests.get(url, headers=self.spark_header)
+            r = requests.get(url, headers=self.setHeaders())
             s = r.status_code
             if (s == 200):
                 d = r.json()
-                self.ut.trace(3, f"success")  
+                ut.trace(3, f"success")  
                 return(d)
             else:
-                self.ut.trace(1,f"error {s}: {r.reason}")  
+                ut.trace(1,f"error {s}: {r.reason}")  
         except requests.exceptions.RequestException as e:
-            self.ut.trace(1, f"error {e}")
+            ut.trace(1, f"error {e}")
 
     # get membership list for given room id  
     # 
     def get_space_memberships(self, rid, ignore_error=False):
         url=f"https://webexapis.com/v1/memberships/?roomId={rid}"
-        self.ut.trace(3, f"{url} ")
+        ut.trace(3, f"{url} ")
         try:
-            r = requests.get(url, headers=self.spark_header)
+            r = requests.get(url, headers=self.setHeaders())
             s = r.status_code
             if (s == 200):
                 d = r.json()
-                self.ut.trace(3, f"success for get_memberships")  
+                ut.trace(3, f"success for get_memberships")  
                 return(d)
             else:
-                not ignore_error and self.ut.trace(1,f"get_memberships error {s}: {r.reason}")
-                self.ut.trace(3, f"error {s}: {r.reason} ")  
+                not ignore_error and ut.trace(1,f"get_memberships error {s}: {r.reason}")
+                ut.trace(3, f"error {s}: {r.reason} ")  
                 return({})
         except requests.exceptions.RequestException as e:
-            self.ut.trace(1, f"error {e}")
+            ut.trace(1, f"error {e}")
 
     # download url contents   
     # 
@@ -154,18 +171,83 @@ class WbxRequest:
         hds=self.req_head(url)
         if ('Content-Disposition' in hds ):
             cd=hds['Content-Disposition'] 
-            self.ut.trace(3, f"got file {str(hds)}")
+            ut.trace(3, f"got file {str(hds)}")
             file_name = re.findall('filename="(.+)"', cd)[0]
             if file_name:
                 try:    
-                    with requests.get(url, headers=self.spark_header) as r:
+                    with requests.get(url, headers=self.setHeaders()) as r:
                         with open(dir+file_name, mode="wb") as f:
                             f.write(r.content)
                             print(f"{dir}{file_name} downloaded.")
                 except:
-                    self.ut.trace(1, f"Error downloading {url}")
+                    ut.trace(1, f"Error downloading {url}")
             else:
-                self.ut.trace(1, f"cannot extract filename in {cd}")
+                ut.trace(1, f"cannot extract filename in {cd}")
         else:
-            self.ut.trace(1, f"no content-disposition in {url}")
+            ut.trace(1, f"no content-disposition in {url}")
+
+    
+    # get the 'other' (apart from given 'uid') person membership in a direct 1:1 space
+    # returns {} if not found
+    #
+    def get_other_person_membership(self, roomId, uid):
+        ut.trace(3, f"{roomId} {uid} ")
+        members=self.get_space_memberships(roomId, True)
+        ut.trace(3, f"got {members}")
+        if 'items' in members:
+            for item in members['items']:
+                if (item['id'] != uid):
+                    return(item)
+        return({})
+
+    # returns created and deleted messages objs for given user email 
+    # optional parameters passed as json string like '{"max":1000}'
+    # returns empty obj if not found
+    # 
+    def get_user_msgs(self, ue, user_opts=""):
+
+        ut.trace (3, f"params = {ue}, {user_opts}")
+
+        uid = self.get_user_id(ue, True)
+        frm = datetime.datetime.now(timezone.utc) - datetime.timedelta(30)
+        frmiso = frm.isoformat(timespec='milliseconds')
+        utcFrm = re.sub('\+.+','', frmiso) + 'Z' # remove the tz suffix 
+
+        to = UTCNOW
+        opts = {'max': 100,'from':utcFrm,'to':to}
+
+        if (uid):
+            # override default options w/ user options
+            #
+            if (user_opts):
+                try:
+                    userOpts=json.loads(user_opts)
+                    if ( userOpts.get('from') or userOpts.get('to') ) : # erase time defaults 
+                        opts = {'max': 100}
+                    for k in userOpts:
+                        opts[k]=userOpts[k]
+                except:
+                    ut.trace(1, f"error parsing {user_opts} not a valid JSON format")
+
+            # construct url parameter string
+            #
+            params=f"?resource=messages&actorId={uid}&"
+            for k in opts:
+                params=f"{params}&{k}={opts[k]}"
+            ut.trace (3, f"searching created msgs params = {params}")
+            created=self.get_events(params)
+
+            # now search for deleted messages so we can mark them as such
+            #
+            params=f"?resource=messages&actorId={uid}&type=deleted"
+            for k in opts:
+                params=f"{params}&{k}={opts[k]}"
+            ut.trace (3, f"searching deleted msgs params = {params}")
+            deleted=self.get_events(params)
+
+            return(created, deleted)
+
+        else:
+            ut.trace(1, f"cannot find user {ue}")
+            return({})
 

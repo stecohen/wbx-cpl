@@ -2,8 +2,9 @@
 
 ## Usage:
 ```
-Usage: python -m wbx_cpl [OPTIONS] COMMAND [ARGS]...
-       python -m wbx_cpl COMMAND --help 
+Usage: 
+  python -m wbx_cpl [OPTIONS] COMMAND [ARGS]...
+  python -m wbx_cpl COMMAND --help 
 
 Options:
   --version            Show the version and exit.
@@ -14,41 +15,49 @@ Options:
   --help               Show this message and exit.
 
 Commands:
-  download-msg-files  Download files attached to given message ID.
-  space-members       List emails of members in given space ID.
-  space-messages      List messages in given space ID.
-  user-messages       List (up to 1000) messages sent by given user email.
+  download-msg-files     Download files attached to given message ID.
+  meeting-messages       List user messages posted in meeting ID.
+  meeting-participants   List meeting participants of given meeting ID.
+  meeting-user-messages  List (up to 1000) messages sent in meetings by...
+  recording-details      Print detais of given recording ID.
+  recordings             List recordings for given webex site
+  space-members          List emails of members in given space ID.
+  space-messages         List messages in given space ID.
+  user-messages          List (up to 1000) messages sent by given user...
 ```
 
 # Examples:
 ```
+# List messages sent in meetings by given user email.
+python -m wbx_cpl  meeting-user-messages bc@4bfzj5.onmicrosoft.com
 
-# List recordings 
-python3 -m wbx_cpl  recordings -c /tmp/recs.csv -f '{"from":"2024-01-15T00:00:00.000Z","max":1}' sandbox.webex.com
+# List meeting participants in given meeting ID.
+python -m wbx_cpl  meeting-participants <meetingID>
 
-# get recording details
-python3 -m wbx_cpl  recording-details 34d9c6fdcaab453f8b540643e04b0830
+# list messages posted in meeting given meeting ID, save in CSV file,
+python -m wbx_cpl  meeting-messages -c /tmp/meeting-messages.csv <meetingID>
 
-# list user sent messages 
-python3 -m wbx_cpl user-messages bc@cust1.onmicrosoft.com 
+# List recordings in given webex site from 15th of Jan 2024. limit results to one recording.
+python -m wbx_cpl  recordings -c /tmp/recs.csv -f {"from":"2024-01-15T00:00:00.000Z","max":1} stephane-gaxe7-sandbox.webex.com
 
-# list up to 5 user sent messages with space title (longer processing time) 
-python3 -m wbx_cpl user-messages -t -f '{"max":5}' bc@cust1.onmicrosoft.com 
+# Get recording details from given recording ID.
+python -m wbx_cpl  recording-details <recordingID>
 
-# list user messages and save to file 
-python3 -m wbx_cpl user-messages -c /tmp/messages.csv bc@cust1.onmicrosoft.com 
+# List messages posted by user email in any space.
+python -m wbx_cpl  user-messages bc@4bfzj5.onmicrosoft.com
 
-# list user messages with tilte and save to file 
-python3 -m wbx_cpl user-messages -c /tmp/messagesTitles.csv -t -f '{"max":5}' bc@cust1.onmicrosoft.com 
+# list user messages, add space tite and save to file.
+python -m wbx_cpl  user-messages -c /tmp/messagesTitles.csv -t -f {"max":5} bc@4bfzj5.onmicrosoft.com
 
-# list messages in space and save to file, up to 5 messages per user 
-python3 -m wbx_cpl space-messages -c /tmp/spacemessages.csv -f '{"max":5}'  
+# List messages posted in given space ID. Save to file, limit search to 5 messages per user.
+python -m wbx_cpl  space-messages -c /tmp/spacemessages.csv -f {"max":5} <spaceID>
 
-# list all users in a in space, save to file 
-python3 -m wbx_cpl space-members -c /tmp/members.csv <spaceid> 
+# List members in given space ID, save to file.
+python -m wbx_cpl  space-members -c /tmp/members.csv <spaceID>
 
-# Download files attached to message id, save files under /tmp 
-python3 -m wbx_cpl download-msg-files -d /tmp/ <spacid>
+# Download files attached to message id, save files under /tmp.
+python -m wbx_cpl  download-msg-files -d /tmp/ <messageID> 
+
 ```
 
 ## Notes:

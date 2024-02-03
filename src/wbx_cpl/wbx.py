@@ -40,18 +40,19 @@ class WbxRequest:
     def get_wbx_data(self, ep, params="", ignore_error=False):
         url = "https://webexapis.com/v1/" + ep + params
         ut.trace(3, f"{url} ")
+        hdr=self.setHeaders()
         try:
-            r = requests.get(url, headers=self.setHeaders())
+            r = requests.get(url, headers=hdr)
             s = r.status_code
             if (s == 200):
                 d = r.json()
-                ut.trace(3, f"success")  
+                ut.trace(3, f"success" )  
                 return(d)
             else:
-                not ignore_error and ut.trace(1,f"error {url} {s}: {r.reason} header={self.spark_header}")  
+                not ignore_error and ut.trace(1,f"error {url} {s}: {r.reason}")  
                 return({})
         except requests.exceptions.RequestException as e:
-            ut.trace(1, f"error {e} header={self.spark_header}")
+            ut.trace(1, f"error {e}")
 
 
     # returns user data json 
@@ -202,9 +203,9 @@ class WbxRequest:
 
     # returns created and deleted messages objs for given user email 
     # optional parameters passed as json string like '{"max":1000}'
-    # returns empty obj if not found
+    # returns empty obj if not found meetingMessages
     # 
-    def get_user_msgs(self, ue, user_opts=""):
+    def get_user_msgs(self, ue, user_opts="", resource="messages"):
 
         ut.trace (3, f"params = {ue}, {user_opts}")
 
@@ -231,7 +232,7 @@ class WbxRequest:
 
             # construct url parameter string
             #
-            params=f"?resource=messages&actorId={uid}&"
+            params=f"?resource={resource}&actorId={uid}&"
             for k in opts:
                 params=f"{params}&{k}={opts[k]}"
             ut.trace (3, f"searching created msgs params = {params}")
@@ -239,7 +240,7 @@ class WbxRequest:
 
             # now search for deleted messages so we can mark them as such
             #
-            params=f"?resource=messages&actorId={uid}&type=deleted"
+            params=f"?resource={resource}&actorId={uid}&type=deleted"
             for k in opts:
                 params=f"{params}&{k}={opts[k]}"
             ut.trace (3, f"searching deleted msgs params = {params}")
@@ -251,3 +252,55 @@ class WbxRequest:
             ut.trace(1, f"cannot find user {ue}")
             return({})
 
+    # returns created and deleted meeting messages objs for given user email 
+    # optional parameters passed as json string like '{"max":1000}'
+    # returns empty obj if not found
+    # 
+    def get_meeting_msgs(self, ue, user_opts=""):
+
+        ut.trace (3, f"params = {ue}, {user_opts}")
+
+        uid = self.get_user_id(ue, True)
+        frm = datetime.datetime.now(timezone.utc) - datetime.timedelta(30)
+        frmiso = frm.isoformat(timespec='milliseconds')
+        utcFrm = re.sub('\+.+','', frmiso) + 'Z' # remove the tz suffix 
+
+        to = UTCNOW
+        opts = {'max': 100,'from':utcFrm,'to':to}
+
+        if (uid):
+            # override default options w/ user options
+            #
+            if (user_opts):
+                try:
+                    userOpts=json.loads(user_opts)
+                    if ( userOpts.get('from') or userOpts.get('to') ) : # erase time defaults 
+                        opts = {'max': 100}
+                    for k in userOpts:
+                        opts[k]=userOpts[k]
+                except:
+                    ut.trace(1, f"error parsing {user_opts} not a valid JSON format")
+
+            # construct url parameter string
+            #
+            params=f"?resource=meetingMessages&actorId={uid}&"
+            for k in opts:
+                params=f"{params}&{k}={opts[k]}"
+            ut.trace (3, f"searching created msgs params = {params}")
+            created=self.get_events(params)
+
+            # now search for deleted messages so we can mark them as such
+            #
+            params=f"?resource=meetingMessages&actorId={uid}&type=deleted"
+            for k in opts:
+                params=f"{params}&{k}={opts[k]}"
+            ut.trace (3, f"searching deleted msgs params = {params}")
+            deleted=self.get_events(params)
+
+            return(created, deleted)
+
+        else:
+            ut.trace(1, f"cannot find user {ue}")
+            return({})
+
+     

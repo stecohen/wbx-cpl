@@ -71,6 +71,20 @@ def print_user_msgs(df, csvdest):
         df.to_csv(csvdest, index=False)
         ut.trace(2, f"{csvdest} written.")
 
+# print panda DF from list of messages sent in meetings
+# 
+def print_in_meeting_user_msgs(df, csvdest, in_meeting=False):
+    #
+    # print to screen  
+    if ( in_meeting ) :
+        print(df.loc[:, ~df.columns.isin(['meetingId', 'id', 'fileCount' ])])
+    else: 
+        print(df.loc[:, ~df.columns.isin(['sentBy', 'id', 'fileCount' ])])
+    if csvdest:
+        df.to_csv(csvdest, index=False)
+        ut.trace(2, f"{csvdest} written.")
+
+
 # print to screen and file if option on 
 #
 def print_space_msgs(df, csvdest):
@@ -103,15 +117,10 @@ def print_memberships(members, csvFile):
     csvFile and df.to_csv(csvFile, index=False)
 
 
-
 #####################
-### User commands ###
+### Messages cmds ###
 #####################
 
-# user facing top level fct 
-# get messages for given user email 
-# optional parameters passed as json string like '{"max":1000}'
-# 
 @click.command()
 @click.option('-f', '--filter', help='JSON string to filter events search e.g. {"from":"2023-12-31T00:00:00.000Z", "max":1}.')
 @click.option('-t', '--title', is_flag=True, show_default=True, default=False, help='Add room title column (requires additonal processing).')
@@ -121,7 +130,7 @@ def user_messages(email, title, filter, csvfile):
     """List (up to 1000) messages sent by given user email. Use the filter option to limit the search if needed."""
     #
     # initialise pandas data frame 
-    msgdf=wbxdf.msgsDF(title, False)
+    msgdf=wbxdf.msgsDF(type='user', title=title)
     if filter :
         try:
             optsJ=json.loads(filter)
@@ -132,11 +141,10 @@ def user_messages(email, title, filter, csvfile):
     ut.trace(3, f"got params {email} {filter}")
     (c,d)=wbxr.get_user_msgs(email, filter)
     if c:
-        df=msgdf.add_msgs(email, c, d, title, False)
+        df=msgdf.add_msgs(email, c, d)
         print_user_msgs(df, csvfile)
     else:
         ut.trace(2, "No messages from {email}")
-
 
 @click.command()
 @click.argument('spaceId')
@@ -154,7 +162,7 @@ def space_messages(spaceid, filter, csvfile):
             ut.trace(1, f"error {filter} not in valid JSON format")
             return(-1) 
     # init
-    msgdf=wbxdf.msgsDF(False, True) # msgs DF
+    msgdf=wbxdf.msgsDF('space') # msgs DF
 
     # get list of users in space, extract their msgs, store in panda DF
     #
@@ -166,7 +174,7 @@ def space_messages(spaceid, filter, csvfile):
             ut.trace(3, f"processing user {ue}")
             if (uid):
                 (c, d)=wbxr.get_user_msgs(ue, filter)
-                df=msgdf.add_msgs(ue, c, d, False, True)
+                df=msgdf.add_msgs(ue, c, d)
             else:
                 ut.trace(3, f"{ue} not found")
         # print
@@ -175,7 +183,6 @@ def space_messages(spaceid, filter, csvfile):
         ut.trace(3, f"no membership data for {spaceid}")
 
 
-# user facing top level fct 
 # get memberships for given room id 
 # 
 @click.command()
@@ -201,7 +208,10 @@ def download_msg_files(msgid, dir):
     else:
         ut.trace(1, f"no attachments found in msg {msgid}")
 
-
+#####################
+### Recording     ###
+#####################
+        
 # list recordings  
 #
 @click.command()
@@ -229,8 +239,6 @@ def recordings(site, csvfile, filter):
                 opts[k]=userOpts[k]
         except:
             ut.trace(1, f"error parsing {filter} not a valid JSON format")
-        
-
     
     # construct url parameter string
     #
@@ -261,11 +269,79 @@ def recording_details(id):
     """Print detais of given recording ID."""
     data = wbxr.get_wbx_data(f"recordings/{id}")
     pprint(data, depth=2, indent=4)
-    
 
+#####################
+### Meeting       ###
+#####################
+
+@click.command()
+@click.option('-f', '--filter', help='JSON string to filter events search e.g. {"from":"2023-12-31T00:00:00.000Z", "max":1}.')
+@click.option('-t', '--title', is_flag=True, show_default=True, default=False, help='Add meeting title column (requires additonal processing).')
+@click.option('-c', '--csvfile', help='Save results to CSV file.')
+@click.argument('email')
+def meeting_user_messages(email, title, filter, csvfile):
+    """List (up to 1000) messages sent in meetings by given user email. Use the filter option to limit the search if needed.
+    Ths only applies to meetings hosted on the Webex Suite meeting platform."""
+    #
+    # initialise pandas data frame 
+    msgdf=wbxdf.msgsDF('meeting')
+    if filter :
+        try:
+            optsJ=json.loads(filter)
+        except:
+            ut.trace(1, f"error {filter} not in valid JSON format")
+            return(-1)
+    # get data   
+    ut.trace(3, f"got params {email} {filter}")
+    (c,d)=wbxr.get_user_msgs(email, filter, "meetingMessages")
+    if c:
+        df=msgdf.add_msgs(email, c, d)
+        print_in_meeting_user_msgs(df, csvfile)
+    else:
+        ut.trace(2, f"No messages from {email}")
+
+@click.command()
+@click.argument('meetingid') 
+@click.option('-c', '--csvfile', help='Save results to CSV file.')
+def meeting_participants(meetingid, csvfile):
+    """List meeting participants of given meeting ID."""
+    dfm=wbxdf.meetingDF()
+    dfm.add_participants(meetingid)
+    dfm.print_participants(csvfile)
+
+
+@click.command()
+@click.argument('meetingid') 
+@click.option('-f', '--filter', help='JSON string to filter events search e.g. {"from":"2023-12-31T00:00:00.000Z", "max":1}.')
+@click.option('-c', '--csvfile', help='Save results to CSV file.')
+def meeting_messages(meetingid, filter, csvfile):
+    """List user messages posted in meeting ID."""
+    # init message DF
+    msgdf=wbxdf.msgsDF(type='meeting', meetingId=meetingid)
+
+    # get list of participant emails
+    dfm=wbxdf.meetingDF()
+    dfm.add_participants(meetingid)
+    emails = dfm.get_participants_emails()
+
+    # add messages sent by each participant
+    for pe in emails:
+        ut.trace(2, f"processing {pe}")
+        (c,d)=wbxr.get_user_msgs(pe, filter, "meetingMessages")
+        if c:
+            df=msgdf.add_msgs(pe, c, d)
+    
+    # print (can be moved to meetingDF)
+    print_in_meeting_user_msgs(df, csvfile, True)
+
+
+#####################
+### Top Lev       ###
+#####################
+    
 @click.group()
 @click.version_option(__version__)
-@click.option('-t', '--token', help='Your access token. AUTH_BEARER env variable by default. You can find your personal token at https://developer.webex.com/docs/getting-started.')
+@click.option('-t', '--token', help='Your access token. Read from AUTH_BEARER env variable by default. You can find your personal token at https://developer.webex.com/docs/getting-started.')
 @click.option('-d', '--debug', default=2, help='Debug level.')
 def cli(debug, token):
     wbx_cpl.utils.DEBUG_LEVEL = debug
@@ -283,14 +359,15 @@ def cli(debug, token):
         else:
             sys.exit('No access token set. Use option -t or AUTH_BEARER env variable')
 
-
-
 cli.add_command(download_msg_files)
 cli.add_command(space_messages) 
 cli.add_command(user_messages) 
 cli.add_command(space_members) 
 cli.add_command(recordings) 
-cli.add_command(recording_details)
+cli.add_command(recording_details)  
+cli.add_command(meeting_user_messages)
+cli.add_command(meeting_participants)
+cli.add_command(meeting_messages)
 
 if __name__ == '__main__':
     cli()

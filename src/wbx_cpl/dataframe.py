@@ -2,9 +2,28 @@ import pandas as pd
 pd.set_option('display.max_colwidth', 80)
 import wbx_cpl.utils 
 from wbx_cpl.wbx import WbxRequest as Wbxr
+import json as json
+
+from webexteamssdk import WebexTeamsAPI
 
 ut=wbx_cpl.utils.UtilsTrc()
 wbxr=Wbxr()
+
+# populates df with data obj based cols list of fields
+#
+def update_df_data(df,  data, cols):    
+    if 'items' in data:
+        for item in data['items']:
+            ut.trace(3, f"Processing item {item}")
+            new_row={}
+            for f in cols:
+                itemdata = item['data']
+                if f in itemdata :
+                    new_row[f]=itemdata[f]
+            df = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
+    else:
+        ut.trace(3, f"no items in {data}")
+    return(df)
 
 class msgsDF:
 
@@ -203,4 +222,61 @@ class meetingDF:
             for part in self.participants['items']:
                 emails.append(part['email'])
         return(emails)
+        
+
+class meetingsDF:
+
+    datafile="meeting_list.json"
+    cols = {'meetingId':[],'created':[],'creatorId':[]}
+
+    def __init__(self):
+        mycols=self.cols
+        self.df = pd.DataFrame(mycols)
+
+    def fetch_meetings(self):
+        # get raw data
+        self.meeting_list = wbxr.get_events("?resource=meetings&type=ended")
+        with open(self.datafile, 'w') as f:
+            f.write(json.dumps(self.meeting_list))
+
+    def list_meetings(self):
+        with open(self.datafile, 'r') as f:
+            meeting_list=json.loads(f.read())
+            self.df=update_df_data(self.df, meeting_list, self.cols)
+            print(self.df)        
+
+
+class usersDF:
+
+    datafile="user_list.json"
+    cols = {'id':[],'emails':[],'displayName':[], 'status':[]}
+
+    def __init__(self):
+        mycols=self.cols
+        self.df = pd.DataFrame(mycols)
+
+    def fetch_data(self):
+        # get raw data
+        self.user_list = wbxr.get_wbx_data("people")
+        with open(self.datafile, 'w') as f:
+            f.write(json.dumps(self.user_list))
+
+    def list_users(self):
+        try: 
+            f = open(self.datafile, 'r')
+            self.user_list=json.loads(f.read())
+            if 'items' in self.user_list:
+                for item in self.user_list['items']:
+                    ut.trace(3, f"Processing item {item}")
+                    new_row={}
+                    for f in self.cols:
+                        if f in item:
+                            new_row[f]=item[f]
+                    self.df = pd.concat([self.df, pd.DataFrame([new_row])], ignore_index=True)
+                else:
+                    ut.trace(3, f"no data")
+        except Exception as e: 
+            print(e)
+            exit(-1)
+        print(self.df)        
         

@@ -14,8 +14,9 @@ import sys
 
 import click
 from pprint import pprint
+import pandas
 
-import wbx_cpl.utils  
+import wbx_cpl.utils as utils 
 import wbx_cpl.dataframe as wbxdf
 import wbx_cpl.wbx
 
@@ -129,25 +130,27 @@ def user_details(email):
     pprint(data)
 
 @click.command()
-def list():
-    """List synced user list."""
+def user_list():
+    """List users ()"""
     df=wbxdf.usersDF()
+    df.fetch_data()  # to do : add this as an opton
     df.list_users()
 
+'''
 @click.command()
-def fetch_data():
+def user_fetch_data():
     """Fetch user data from Webex."""
     df=wbxdf.usersDF()
     df.fetch_data()
-
+'''
 
 @click.group()
-def users():
+def user():
     pass
 
-users.add_command(user_details)
-users.add_command(fetch_data)
-users.add_command(list)
+user.add_command(user_details, name='details')
+# users.add_command(fetch_data)
+user.add_command(user_list, name='list')
 
 #####################
 ### Messages cmds ###
@@ -254,13 +257,17 @@ messaging.add_command(space_members)
 #####################
 ### Recording     ###
 #####################
-        
+
+@click.group()
+def recording():
+    pass
+
 # list recordings  
 #
 @click.command()
 @click.argument('site') 
 @click.option('-c', '--csvfile', help='Save results to CSV file.')
-@click.option('-f', '--filter', help='JSON string to filter events search e.g. {"from":"2023-12-31T00:00:00.000Z", "max":1}.')
+@click.option('-f', '--filter', help='JSON string to filter search e.g. {"from":"2023-12-31T00:00:00.000Z", "max":1}. Same filters as https://developer.webex.com/docs/api/v1/recordings/list-recordings-for-an-admin-or-compliance-officer')
 def recordings(site, csvfile, filter):
     """List recordings for given webex site"""
     #
@@ -291,6 +298,7 @@ def recordings(site, csvfile, filter):
 
     # get recording data
     #
+    print(f"Serching recordings with parameters: {params}")
     data = wbxr.get_wbx_data(f"admin/recordings?{params}")
 
     # store in panda DF and print
@@ -313,10 +321,51 @@ def recording_details(id):
     data = wbxr.get_wbx_data(f"recordings/{id}")
     pprint(data, depth=2, indent=4)
 
+
+# get recording content
+#
+@click.command()
+@click.option('-d', '--dir', default="", help='directory destination for downlaads.')
+@click.argument('id_or_csv') 
+def get_recording_media(id_or_csv, dir):
+    """downloads media of given recording ID or list of IDs in .CSV file (in the 'id' column). """
+    iscsv = re.match('.*\.csv$', id_or_csv, re.IGNORECASE)
+    if (iscsv):
+        try:
+            df = pandas.read_csv(id_or_csv)
+            # print(df)
+            for id in df['id']:
+                print(f"Processing recording {id}...")
+                data = wbxr.get_wbx_data(f"recordings/{id}")
+                if ( data ) :
+                    rdl=data['temporaryDirectDownloadLinks']['recordingDownloadLink']
+                    wbxr.download_contents(rdl, dir, f"recording-{id}-{data['hostEmail']}-{data['createTime']}.{data['format']}")
+                else :
+                    ut.trace(2, f"No data for recording {id}")
+        except FileNotFoundError:
+            ut.trace(1, f"Error: File '{id_or_csv}' not found.")
+            exit(-1)
+        except Exception as e:
+            ut.trace(1, f"An error occurred while reading the file '{id_or_csv}': {e}")
+            exit(-1)
+    else:
+        data = wbxr.get_wbx_data(f"recordings/{id_or_csv}")
+        if ( data ):
+            rdl=data['temporaryDirectDownloadLinks']['recordingDownloadLink']
+            wbxr.download_contents(rdl, dir, f"recording-{id_or_csv}-{data['hostEmail']}-{data['createTime']}.{data['format']}")
+        else : 
+            ut.trace(2, f"No data for recording {id_or_csv}")
+
+
+recording.add_command(recordings, name='list') 
+recording.add_command(recording_details, name='details')  
+recording.add_command(get_recording_media, name='download')
+
 #####################
 ### Meeting       ###
 #####################
 
+# WIP not needed I supposed
 @click.command()
 @click.option('-f', '--filter', help='JSON string to filter events search e.g. {"from":"2023-12-31T00:00:00.000Z", "max":1}.')
 def fetch_meetings(filter):
@@ -339,13 +388,19 @@ def fetch_meetings(filter):
     #
     meetingsdf.fetch_meetings()
 
+# List meetings from events API
+#
 @click.command()
+@click.option('-e', '--email', help='host email address. All users listed by default')
 @click.option('-c', '--csvfile', help='Save results to CSV file.')
-def list_meetings(csvfile):
-    """Prints list of meetings from synced raw data.""" 
-    # 
+@click.option('-f', '--filter', help='JSON string to filter events search e.g. {"from":"2023-12-31T00:00:00.000Z", "max":1}.')
+def list_meetings_events(email, csvfile, filter):
+    """List past meetings events. Defaults to last 30 days and 100 meetings. 
+    See filter option to override and https://developer.webex.com/docs/api/v1/events/list-events for details.""" 
+    #
     meetingsdf=wbxdf.meetingsDF()
-    meetingsdf.list_meetings()
+    # WIP meetingsdf.fetch_meetings() .... might do later to cache data in files
+    meetingsdf.list_meetings(email, csvfile, filter)
 
 
 @click.command()
@@ -377,11 +432,22 @@ def meeting_user_messages(email, title, filter, csvfile):
 @click.command()
 @click.argument('meetingid') 
 @click.option('-c', '--csvfile', help='Save results to CSV file.')
-def participants(meetingid, csvfile):
+def meeting_participants(meetingid, csvfile):
     """List meeting participants of given meeting ID."""
-    dfm=wbxdf.meetingDF()
-    dfm.add_participants(meetingid)
+    dfm=wbxdf.meetingDF(meetingid)
+    # dfm.add_participants(meetingid)
     dfm.print_participants(csvfile)
+
+@click.command()
+@click.argument('meetingid') 
+def meeting_details(meetingid):
+    """Details of given meeting ID."""
+    dfm=wbxdf.meetingDF(meetingid)
+    # dfm.get_details(meetingid)
+    if ( dfm.details) :
+        pprint(dfm.details)
+    else :
+        print("Error getting details of meeting ID {meetingid}")
 
 
 @click.command()
@@ -389,43 +455,53 @@ def participants(meetingid, csvfile):
 @click.option('-f', '--filter', help='JSON string to filter events search e.g. {"from":"2023-12-31T00:00:00.000Z", "max":1}.')
 @click.option('-c', '--csvfile', help='Save results to CSV file.')
 def meeting_messages(meetingid, filter, csvfile):
-    """List user messages posted in meeting ID."""
+    """List messages posted in meeting ID, up to 100 messages per participant"""
     # init message DF
     msgdf=wbxdf.msgsDF(type='meeting', meetingId=meetingid)
 
-    # get list of participant emails
-    dfm=wbxdf.meetingDF()
-    dfm.add_participants(meetingid)
+    # get details and list of participants
+    dfm=wbxdf.meetingDF(meetingid)
     emails = dfm.get_participants_emails()
+    meetingDetails = dfm.details
 
-    # add messages sent by each participant
-    for pe in emails:
-        ut.trace(2, f"processing {pe}")
-        (c,d)=wbxr.get_user_msgs(pe, filter, "meetingMessages")
-        if c:
-            df=msgdf.add_msgs(pe, c, d)
-    
-    # print (can be moved to meetingDF)
-    print_in_meeting_user_msgs(df, csvfile, True)
+    if ( meetingDetails and meetingDetails['state'] == 'ended'):
+
+        # add messages sent by each participant from the time of the meeting start
+        got_some_msgs=False
+        for pe in emails:
+            ut.trace(2, f"processing {pe}")
+            dt_iso_ms=utils.datetime_to_iso_ms(meetingDetails['start'])
+            filter={'from':dt_iso_ms}
+            (c,d)=wbxr.get_user_msgs(pe, json.dumps(filter), "meetingMessages")
+            if c:
+                df=msgdf.add_msgs(pe, c, d)
+                got_some_msgs=True
+        
+        # print (can be moved to meetingDF)
+        if (got_some_msgs):
+            print_in_meeting_user_msgs(df, csvfile, True)
+        else:
+            print("No messages found.")
+    else:
+        print(f"Meeting ID {meetingid} not found or not ended")
+        
 
 
 @click.group()
 def meeting():
     pass
 
-meeting.add_command(recordings) 
-meeting.add_command(recording_details)  
-meeting.add_command(meeting_user_messages)
-meeting.add_command(participants)
-meeting.add_command(meeting_messages)
-meeting.add_command(fetch_meetings)
-meeting.add_command(list_meetings)
+meeting.add_command(meeting_user_messages, name='user_messages') 
+meeting.add_command(meeting_participants, name='participants')
+meeting.add_command(meeting_messages, name='messages')
+# meeting.add_command(fetch_meetings, name='fetch')
+meeting.add_command(list_meetings_events, name='list')
+meeting.add_command(meeting_details, name='details')
 
 
 #####################
 ### Top Lev       ###
 #####################
-
 
 @click.group()
 @click.version_option(__version__)
@@ -449,7 +525,8 @@ def cli(debug, token):
 
 cli.add_command(messaging)
 cli.add_command(meeting)
-cli.add_command(users)
+# cli.add_command(user)
+cli.add_command(recording)
 
 if __name__ == '__main__':
     cli()

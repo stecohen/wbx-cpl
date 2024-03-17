@@ -144,8 +144,11 @@ class WbxRequest:
                 return(d)
             else:
                 ut.trace(1,f"error {s}: {r.reason}")  
+                return({})
         except requests.exceptions.RequestException as e:
             ut.trace(1, f"error {e}")
+            return({})
+
 
     # get membership list for given room id  
     # 
@@ -165,16 +168,23 @@ class WbxRequest:
                 return({})
         except requests.exceptions.RequestException as e:
             ut.trace(1, f"error {e}")
+            return({})
+
 
     # download url contents   
+    # will use name from content dispostion by default
     # 
-    def download_contents(self, url, dir=""):
+    def download_contents(self, url, dir="", name=""):
         hds=self.req_head(url)
         if ('Content-Disposition' in hds ):
             cd=hds['Content-Disposition'] 
             ut.trace(3, f"got file {str(hds)}")
-            file_name = re.findall('filename="(.+)"', cd)[0]
-            if file_name:
+            cd_name = re.findall('filename="(.+)"', cd)[0]
+            if cd_name:
+                if name:
+                    file_name=name
+                else:
+                    file_name=cd_name                    
                 try:    
                     with requests.get(url, headers=self.setHeaders()) as r:
                         with open(dir+file_name, mode="wb") as f:
@@ -250,7 +260,7 @@ class WbxRequest:
 
         else:
             ut.trace(1, f"cannot find user {ue}")
-            return({})
+            return({},{})
 
     # returns created and deleted meeting messages objs for given user email 
     # optional parameters passed as json string like '{"max":1000}'
@@ -303,4 +313,49 @@ class WbxRequest:
             ut.trace(1, f"cannot find user {ue}")
             return({})
 
-     
+    # returns meetings evts list for user email or all sites by default
+    # optional parameters passed as json string like '{"max":1000}'
+    # returns empty obj if not found
+    # 
+    def get_meeting_events(self, ue="", user_opts=""):
+
+        ut.trace (3, f"params = {user_opts}")
+
+        actorIdParam=""
+        if (ue):
+            try:
+                uid = self.get_user_id(ue, True)
+                actorIdParam=f"&actorId={uid}"
+            except:
+                ut.trace(1, f"error host email {ue} not found.")
+                return({})
+        
+
+        frm = datetime.datetime.now(timezone.utc) - datetime.timedelta(30)
+        frmiso = frm.isoformat(timespec='milliseconds')
+        utcFrm = re.sub('\+.+','', frmiso) + 'Z' # remove the tz suffix 
+
+        to = UTCNOW
+        opts = {'max': 100,'from':utcFrm,'to':to}
+
+        # override default options w/ user options
+        #
+        if (user_opts):
+            try:
+                userOpts=json.loads(user_opts)
+                if ( userOpts.get('from') or userOpts.get('to') ) : # erase time defaults 
+                    opts = {'max': 100} # a bit dirty 
+                for k in userOpts:
+                    opts[k]=userOpts[k]
+            except:
+                ut.trace(1, f"error parsing {user_opts} not a valid JSON format")
+
+        # construct url parameter string
+        #
+        params=f"?resource=meetings&type=ended{actorIdParam}"
+        for k in opts:
+            params=f"{params}&{k}={opts[k]}"
+        ut.trace (3, f"searching meetings events msgs params = {params}")
+        meetings=self.get_events(params)
+
+        return(meetings)

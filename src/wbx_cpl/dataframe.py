@@ -71,7 +71,7 @@ class msgsDF:
         for item in cr_msgs['items']:
             msg=item['data']
             title="N/A"
-            ut.trace (3, f"got message: " + str(msg))
+            ut.trace (3, f"got message: {msg['text']} {msg['created']} ")
 
             if (not self.meetingId or (msg['meetingId'] == self.meetingId)): # if InMeeting: only retain messages for this meeting
                 # new row from msg
@@ -117,7 +117,7 @@ class msgsDF:
                         # direct rooms don't have a title. Need to extract the 'other' member in the space
                         if (msg['roomType'] == 'direct'):
                             ut.trace (3, "direct message, getting other person email " + str(locals()))
-                            other_member=self.get_other_person_membership(msg['roomId'],msg['personId'])
+                            other_member=wbxr.get_other_person_membership(msg['roomId'],msg['personId'])
                             # title=f"{other_member['personDisplayName']} ({other_member['personEmail']})"
                             title=f"{other_member['personEmail']}"
                         else:
@@ -129,6 +129,7 @@ class msgsDF:
                 
                 # finally add to DF  
                 # 
+                ut.trace (3, f"adding message: {msg['text']} {msg['created']} ")
                 if ('created' in msg):
                     self.df = pd.concat([self.df, pd.DataFrame([new_row])], ignore_index=True)
                 #
@@ -190,15 +191,18 @@ class meetingDF:
 
     cols = {'email':[],'displayName':[],'host':[]}
 
-    def __init__(self):
+    def __init__(self, meetingId):
         mycols=self.cols
         self.df = pd.DataFrame(mycols)
+        self.meetingId=meetingId
         self.df['host'] = self.df['host'].astype(bool)
+        self.add_participants()
+        self.add_details()
 
-    def add_participants(self, meetingId):
+    def add_participants(self):
         #
         # get row data
-        self.participants = wbxr.get_wbx_data(f"meetingParticipants", f"?meetingId={meetingId}")
+        self.participants = wbxr.get_wbx_data(f"meetingParticipants", f"?meetingId={self.meetingId}")
         #
         # build DF
         if 'items' in self.participants:
@@ -210,7 +214,7 @@ class meetingDF:
                         new_row[f]=part[f]
                 self.df = pd.concat([self.df, pd.DataFrame([new_row])], ignore_index=True)
         else:
-            ut.trace(3, f"no particiapnt data")
+            ut.trace(3, f"Error listing participants in meeting ID {self.meetingId}")
     
     def print_participants(self, csvFile):
         print(self.df)
@@ -222,30 +226,56 @@ class meetingDF:
             for part in self.participants['items']:
                 emails.append(part['email'])
         return(emails)
-        
+    
+    def add_details(self) :
+        self.details=wbxr.get_wbx_data(f"meetings/{self.meetingId}")
+ 
 
 class meetingsDF:
 
     datafile="meeting_list.json"
-    cols = {'meetingId':[],'created':[],'creatorId':[]}
+    cols = {'meetingId':[], 'title':[], 'created':[],}
 
     def __init__(self):
         mycols=self.cols
         self.df = pd.DataFrame(mycols)
 
-    def fetch_meetings(self):
+    ''' All this WIP 
+
+    def fetch_meetings(self, userOpts=""):
         # get raw data
-        self.meeting_list = wbxr.get_events("?resource=meetings&type=ended")
+        self.meeting_list = wbxr.get_meeting_events(userOpts)
         with open(self.datafile, 'w') as f:
             f.write(json.dumps(self.meeting_list))
 
-    def list_meetings(self):
+    def list_meetings(self, userOpts=""):
         with open(self.datafile, 'r') as f:
-            meeting_list=json.loads(f.read())
+            # meeting_list=json.loads(f.read())
+            meeting_list = wbxr.get_meeting_events(userOpts)
             self.df=update_df_data(self.df, meeting_list, self.cols)
             print(self.df)        
+    ''' 
 
+    # print to screen and file if option on 
+    #
+    def print(self, csvdest):
+        df = self.df.sort_values(by=['created'])
+        print(df.loc[:, ~df.columns.isin([''])])
+        if csvdest:
+            df.to_csv(csvdest, index=False)
+            ut.trace(2, f"{csvdest} written.")
 
+    # pull from events, store and displays 
+    #
+    def list_meetings(self, email, csvdest, userOpts=""):
+        meeting_list = wbxr.get_meeting_events(email, userOpts)
+        if (meeting_list) :
+            self.df=update_df_data(self.df, meeting_list, self.cols)
+            self.print(csvdest)
+        else :  
+            print("Error")
+
+# User DB WIP
 class usersDF:
 
     datafile="user_list.json"

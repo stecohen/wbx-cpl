@@ -4,8 +4,6 @@ import wbx_cpl.utils
 from wbx_cpl.wbx import WbxRequest as Wbxr
 import json as json
 
-from webexteamssdk import WebexTeamsAPI
-
 ut=wbx_cpl.utils.UtilsTrc()
 wbxr=Wbxr()
 

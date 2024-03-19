@@ -22,6 +22,8 @@ def is_email_format(id):
 
 # date time format required for Wbx 
 def datetime_to_iso_ms(dtStr):
+    # print (dtStr)
+    dtStr=re.sub('Z$','',dtStr)
     dt=dt=datetime.datetime.fromisoformat(dtStr)
     iso_ms = dt.isoformat(timespec='milliseconds')
     return (re.sub('\+.+','', iso_ms) + 'Z')

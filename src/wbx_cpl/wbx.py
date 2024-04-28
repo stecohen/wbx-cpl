@@ -4,6 +4,7 @@ from datetime import timezone
 import requests
 import json
 import re
+import urllib.parse
 
 ut=utils.UtilsTrc()
 
@@ -38,6 +39,7 @@ class WbxRequest:
     # returns {} if not happy  
     #
     def get_wbx_data(self, ep, params="", ignore_error=False):
+        params = urllib.parse.quote(params, safe='/=?')
         url = "https://webexapis.com/v1/" + ep + params
         ut.trace(3, f"{url} ")
         hdr=self.setHeaders()
@@ -56,7 +58,6 @@ class WbxRequest:
 
 
     # returns user data json 
-    # returns "" if not found or some error   
     #
     def get_user_details(self, email_or_uid): 
         ut.trace (3, f"processing user {email_or_uid}")  
@@ -64,36 +65,20 @@ class WbxRequest:
         if ( utils.is_email_format(email_or_uid)):
             uid = self.get_user_id(email_or_uid)
             if (uid=="") :
-                return ""
+                return {}
         else:
             uid=email_or_uid
 
-        url=f"https://webexapis.com/v1/people/{uid}"
-        r = requests.request("GET", url, headers=self.setHeaders())
-        s = r.status_code
-        if s == 200 :
-            ut.trace(3,f"found {uid}")
-            return(r.json())
-        else:
-            ut.trace(1,f"did not find {uid}")
-            return("")
-
+        url=f"people/{uid}"
+        return self.get_wbx_data(url)
     
     # returms user id of given user email address 
     # returns "" if not found or some error   
     #
     def get_user_id(self, ue, ignore_error=False):
-        # disable warnings about using certificate verification
-        requests.packages.urllib3.disable_warnings()
-        # get_user_url=urllib.parse.quote("https://webexapis.com/v1/people?email=" + ue)
-        get_user_url="https://webexapis.com/v1/people?email=" +ue
-
-        ut.trace (3, f"calling {get_user_url} T = {ACCESS_TOKEN}")  
-        # send GET request and do not verify SSL certificate for simplicity of this example
-        r = requests.get(get_user_url, headers=self.setHeaders(), verify=True)
-        s = r.status_code
-        if s == 200 :
-            j = r.json()
+      
+        j = self.get_wbx_data("people?", "email="+ue, ignore_error)
+        if ( j ) :
             if ( len(j["items"]) == 0 ):
                 not ignore_error and ut.trace (1, f"user email {ue} not found")
                 return("")
@@ -105,12 +90,6 @@ class WbxRequest:
                     u = j["items"][0]
                     ut.trace (3,f"email {ue} found {u['id']} ")
                     return(u['id'])     
-        elif s == 404:
-            not ignore_error and ut.trace(1,f"got error {s}: {r.reason}")  
-            return("")
-        else :
-            ut.trace(1,f"got error {s}: {r.reason}")  
-            return("")
         
     # generic head request  
     # 
@@ -133,43 +112,24 @@ class WbxRequest:
     # generic events API 
     # 
     def get_events(self, opts):
-        url=f"https://webexapis.com/v1/events{opts}"
-        ut.trace(3, f"{url} ")
-        try:
-            r = requests.get(url, headers=self.setHeaders())
-            s = r.status_code
-            if (s == 200):
-                d = r.json()
-                ut.trace(3, f"success")  
-                return(d)
-            else:
-                ut.trace(1,f"error {s}: {r.reason}")  
-                return({})
-        except requests.exceptions.RequestException as e:
-            ut.trace(1, f"error {e}")
-            return({})
-
+        url=f"events{opts}"
+        ut.trace(3, f"get_events {url} ")
+        return self.get_wbx_data(url)
 
     # get membership list for given room id  
     # 
     def get_space_memberships(self, rid, ignore_error=False):
-        url=f"https://webexapis.com/v1/memberships/?roomId={rid}"
+        url=f"memberships/?roomId={rid}"
         ut.trace(3, f"{url} ")
-        try:
-            r = requests.get(url, headers=self.setHeaders())
-            s = r.status_code
-            if (s == 200):
-                d = r.json()
-                ut.trace(3, f"success for get_memberships")  
-                return(d)
-            else:
-                not ignore_error and ut.trace(1,f"get_memberships error {s}: {r.reason}")
-                ut.trace(3, f"error {s}: {r.reason} ")  
-                return({})
-        except requests.exceptions.RequestException as e:
-            ut.trace(1, f"error {e}")
-            return({})
+        return self.get_wbx_data(url, "", ignore_error)
 
+    # get list of spaces for a user email
+    # 
+    def get_user_spaces(self, email, ignore_error=False):
+        url=f"memberships"
+        data = self.get_wbx_data(url, f"?personEmail={email}", ignore_error)
+        ut.trace(3, f"get_user_spaces : got {json.dumps(data)} ")
+        return(data)
 
     # download url contents   
     # will use name from content dispostion by default
@@ -329,8 +289,7 @@ class WbxRequest:
             except:
                 ut.trace(1, f"error host email {ue} not found.")
                 return({})
-        
-
+            
         frm = datetime.datetime.now(timezone.utc) - datetime.timedelta(30)
         frmiso = frm.isoformat(timespec='milliseconds')
         utcFrm = re.sub('\+.+','', frmiso) + 'Z' # remove the tz suffix 

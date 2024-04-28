@@ -14,7 +14,7 @@ import sys
 
 import click
 from pprint import pprint
-import pandas
+import pandas as pd
 
 import wbx_cpl.utils as utils 
 import wbx_cpl.dataframe as wbxdf
@@ -111,7 +111,6 @@ def print_recordings(df, csvdest):
 # 
 def print_memberships(members, csvFile):
     #
-    cols = {'personEmail':[],'personDisplayName':[],'created':[]}
     df=wbxdf.membershipDF()
     df=df.add_data(members)
     print(df.loc[:, ~df.columns.isin(['id','files', 'roomId'])])
@@ -228,6 +227,29 @@ def space_members(spaceid, csvfile):
     data = wbxr.get_space_memberships(spaceid)
     print_memberships(data, csvfile)
 
+# get list of spaces for given user email 
+# 
+@click.command()
+@click.argument('email') 
+@click.option('-c', '--csvfile', help='Save results to CSV file.')
+def user_spaces(email, csvfile):
+    """List spaces joined by given user email """
+    df = wbxdf.spacesMembershipDF(email)
+    df.print(csvfile)
+
+@click.command()
+@click.argument('users_export') 
+@click.option('-c', '--csvfile', help='Save results to CSV file.')
+def spaces_count(users_export, csvfile):
+    """Search all spaces joined by users listed in csv export file.  """
+    spaces_DB={}
+    iscsv = re.match('.*\.csv$', users_export, re.IGNORECASE)
+    if (iscsv):
+        df = wbxdf.spacesCountDF(users_export)
+        df.print(csvfile)
+    else:
+        print ("I need a .CSV input file")
+
 # download files in given msg id   
 #
 @click.command()
@@ -251,7 +273,9 @@ def messaging():
 messaging.add_command(message_files)
 messaging.add_command(space_messages) 
 messaging.add_command(user_messages) 
+messaging.add_command(user_spaces) 
 messaging.add_command(space_members) 
+messaging.add_command(spaces_count)
 
 
 #####################
@@ -332,7 +356,7 @@ def get_recording_media(id_or_csv, dir):
     iscsv = re.match('.*\.csv$', id_or_csv, re.IGNORECASE)
     if (iscsv):
         try:
-            df = pandas.read_csv(id_or_csv)
+            df = pd.read_csv(id_or_csv)
             # print(df)
             for id in df['id']:
                 print(f"Processing recording {id}...")

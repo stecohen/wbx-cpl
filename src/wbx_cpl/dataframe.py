@@ -3,6 +3,7 @@ pd.set_option('display.max_colwidth', 80)
 import wbx_cpl.utils 
 from wbx_cpl.wbx import WbxRequest as Wbxr
 import json as json
+import re
 
 ut=wbx_cpl.utils.UtilsTrc()
 wbxr=Wbxr()
@@ -184,6 +185,84 @@ class membershipDF:
             ut.trace(3, f"no membership data")
         # return DF
         return(self.df)
+    
+class spacesMembershipDF:
+
+    cols = {'roomId':[], 'created':[], 'roomType':[]}
+
+    def __init__(self, email):
+        mycols=self.cols
+        self.df = pd.DataFrame(mycols)
+        self.spaces = wbxr.get_user_spaces(email)
+        self.add_data()
+        self.user_email=email
+        
+    def add_data(self):
+        #
+        if 'items' in self.spaces:
+            for spc in self.spaces['items']:
+                new_row={}
+                for f in self.cols:
+                    if f in spc:
+                        new_row[f]=spc[f]
+                self.df = pd.concat([self.df, pd.DataFrame([new_row])], ignore_index=True)
+        else:
+            ut.trace(3, f"no membership data for {self.user_email}")
+
+    def print(self, csvfile):
+        print(self.df)
+        csvfile and self.df.to_csv(csvfile, index=False)
+
+class spacesCountDF:
+
+    cols = {'id':[], 'title':[], 'type':[]}
+
+    def __init__(self, users_csv_file):
+        mycols=self.cols
+        self.df = pd.DataFrame(mycols)
+        self.add_data(users_csv_file)
+        
+    def add_data(self, users_csv_file):
+        self.spaces_DB={}
+        try:
+            usesrsdf = pd.read_csv(users_csv_file)
+            for email in usesrsdf['User ID/Email (Required)']:
+                print(f"Processing user {email}...")
+                spaces = wbxr.get_user_spaces(email)
+                if (spaces) :
+                    if 'items' in spaces:
+                        for spc in spaces['items']:
+                            id = spc['roomId']
+                            print(f"space id {id}", end=' ')
+                            if ( id in self.spaces_DB ):
+                                print(f"Already exists")
+                                self.spaces_DB[id]['count'] = self.spaces_DB[id]['count'] + 1
+                            else:
+                                print(f"Adding space data")
+                                space_details = wbxr.get_wbx_data(f"rooms/{id}")
+                                if (space_details): 
+                                    if space_details['type'] == 'group':
+                                        self.spaces_DB[id] = {}
+                                        self.spaces_DB[id]['count'] = 1
+                                        self.spaces_DB[id]['details'] = space_details
+                    else:
+                        ut.trace(3, f"{email} has no membership data")
+            # build DF 
+            for id in self.spaces_DB:
+                new_row={}
+                new_row['count']=self.spaces_DB[id]['count']
+                for f in self.cols:
+                    if f in self.spaces_DB[id]['details']:
+                        new_row[f]=self.spaces_DB[id]['details'][f]
+                self.df = pd.concat([self.df, pd.DataFrame([new_row])], ignore_index=True)
+
+        except FileNotFoundError:
+            ut.trace(1, f"Error: File '{users_csv_file}' not found.")
+
+    def print(self, csvfile):
+        print(self.df.loc[:, ~self.df.columns.isin([])])
+        csvfile and self.df.to_csv(csvfile, index=False)
+
 
 class meetingDF:
 
@@ -228,6 +307,7 @@ class meetingDF:
     def add_details(self) :
         self.details=wbxr.get_wbx_data(f"meetings/{self.meetingId}")
  
+
 
 class meetingsDF:
 

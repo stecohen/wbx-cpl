@@ -65,6 +65,11 @@ Commands:
 # Download files attached to message id, save files under /tmp
 # python3 -m wbx_cpl messaging message-files -d /tmp/ Y2lzY29zcGFyazovL3VybjpURUFNOnVzLXdlc3QtMl9yL01FU1NBR0UvMWYwY2NkZDAtYTNmMi0xMWVlLWI4ZGQtM2RlYzU4YzM1NTJm
 
+# List spaces joined by given user email 
+# python3 -m wbx_cpl messaging user-spaces sc-ben@mail.com
+
+# List spaces joined by users listed in user export file (column 'User ID/Email (Required)')
+# python3 -m wbx_cpl messaging spaces-count exported_users-a.csv 
 ```
 
 ## Notes:

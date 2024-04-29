@@ -227,7 +227,7 @@ class spacesCountDF:
         try:
             usesrsdf = pd.read_csv(users_csv_file)
             for email in usesrsdf['User ID/Email (Required)']:
-                print(f"Processing user {email}...")
+                # print(f"Processing user {email}...")
                 spaces = wbxr.get_user_spaces(email)
                 if (spaces) :
                     if 'items' in spaces:
@@ -235,10 +235,10 @@ class spacesCountDF:
                             id = spc['roomId']
                             print(f"space id {id}", end=' ')
                             if ( id in self.spaces_DB ):
-                                print(f"Already exists")
+                                # print(f"Already exists")
                                 self.spaces_DB[id]['count'] = self.spaces_DB[id]['count'] + 1
                             else:
-                                print(f"Adding space data")
+                                # print(f"Adding space data")
                                 space_details = wbxr.get_wbx_data(f"rooms/{id}")
                                 if (space_details): 
                                     if space_details['type'] == 'group':

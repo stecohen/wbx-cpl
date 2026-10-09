@@ -35,7 +35,7 @@ logging.basicConfig()
 # move this to wbx.py
 now = datetime.datetime.now(timezone.utc)
 nowiso = now.isoformat(timespec='milliseconds')
-UTCNOW = re.sub('\+.+','', nowiso) + 'Z' # remove the tz suffix 
+UTCNOW = re.sub(r'\+.+', '', nowiso) + 'Z' # remove the tz suffix
 
 ###################
 ### UTILS functions 
@@ -243,7 +243,7 @@ def user_spaces(email, csvfile):
 def spaces_count(users_export, csvfile):
     """Search all spaces joined by users listed in csv export file.  """
     spaces_DB={}
-    iscsv = re.match('.*\.csv$', users_export, re.IGNORECASE)
+    iscsv = re.match(r'.*\.csv$', users_export, re.IGNORECASE)
     if (iscsv):
         df = wbxdf.spacesCountDF(users_export)
         df.print(csvfile)
@@ -298,7 +298,7 @@ def recordings(site, csvfile, filter):
     # defaults options
     #
     frm = datetime.datetime.now() - datetime.timedelta(30)
-    utcFrm=frm.isoformat(timespec='milliseconds').replace('\+.*','') + 'Z'
+    utcFrm=re.sub(r'\+.*', '', frm.isoformat(timespec='milliseconds')) + 'Z'
     to = UTCNOW
     opts = {'max': 100,'from':utcFrm,'to':to}
 
@@ -353,7 +353,7 @@ def recording_details(id):
 @click.argument('id_or_csv') 
 def get_recording_media(id_or_csv, dir):
     """downloads media of given recording ID or list of IDs in .CSV file (in the 'id' column). """
-    iscsv = re.match('.*\.csv$', id_or_csv, re.IGNORECASE)
+    iscsv = re.match(r'.*\.csv$', id_or_csv, re.IGNORECASE)
     if (iscsv):
         try:
             df = pd.read_csv(id_or_csv)
@@ -412,19 +412,23 @@ def fetch_meetings(filter):
     #
     meetingsdf.fetch_meetings()
 
-# List meetings from events API
+# List ended meeting events and scheduled meeting instances
 #
 @click.command()
-@click.option('-e', '--email', help='host email address. All users listed by default')
+@click.option(
+    '-e', '--email', '--host-email', 'email',
+    help='Filter to meetings hosted by this email address. Omit to list all users.'
+)
 @click.option('-c', '--csvfile', help='Save results to CSV file.')
-@click.option('-f', '--filter', help='JSON string to filter events search e.g. {"from":"2023-12-31T00:00:00.000Z", "max":1}.')
-def list_meetings_events(email, csvfile, filter):
-    """List past meetings events. Defaults to last 30 days and 100 meetings. 
-    See filter option to override and https://developer.webex.com/docs/api/v1/events/list-events for details.""" 
+@click.option('-f', '--filter', help='JSON filters for both searches, e.g. {"from":"2023-12-31T00:00:00.000Z", "max":1}.')
+@click.option('--past-only', is_flag=True, help='List only ended meeting events; skip scheduled meetings.')
+def list_meetings_events(email, csvfile, filter, past_only):
+    """List ended and scheduled meetings. Ended meetings default to the last 30 days; scheduled meetings default to the next 7 days.
+    Use the filter option to change the date range or result limit."""
     #
     meetingsdf=wbxdf.meetingsDF()
     # WIP meetingsdf.fetch_meetings() .... might do later to cache data in files
-    meetingsdf.list_meetings(email, csvfile, filter)
+    meetingsdf.list_meetings(email, csvfile, filter, include_future=not past_only)
 
 
 @click.command()
@@ -542,7 +546,7 @@ def cli(debug, token):
         wbx_cpl.wbx.ACCESS_TOKEN=token
     else:
         if ( 'AUTH_BEARER' in os.environ ):
-            ut.trace(3, f"setting Access Token from env {os.environ['AUTH_BEARER']}")
+            ut.trace(3, "setting access token from AUTH_BEARER environment variable")
             wbx_cpl.wbx.ACCESS_TOKEN=os.environ['AUTH_BEARER']
         else:
             sys.exit('No access token set. Use option -t or AUTH_BEARER env variable')

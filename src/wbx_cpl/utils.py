@@ -26,5 +26,5 @@ def datetime_to_iso_ms(dtStr):
     dtStr=re.sub('Z$','',dtStr)
     dt=dt=datetime.datetime.fromisoformat(dtStr)
     iso_ms = dt.isoformat(timespec='milliseconds')
-    return (re.sub('\+.+','', iso_ms) + 'Z')
+    return (re.sub(r'\+.+', '', iso_ms) + 'Z')
 

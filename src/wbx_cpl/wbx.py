@@ -11,7 +11,7 @@ ut=utils.UtilsTrc()
 # move this to wbx.py
 now = datetime.datetime.now(timezone.utc)
 nowiso = now.isoformat(timespec='milliseconds')
-UTCNOW = re.sub('\+.+','', nowiso) + 'Z' # remove the tz suffix 
+UTCNOW = re.sub(r'\+.+', '', nowiso) + 'Z' # remove the tz suffix
 
 ACCESS_TOKEN=""
 
@@ -21,12 +21,12 @@ class WbxRequest:
         pass
 
     def set_token(self, tok):
+        global ACCESS_TOKEN
         ACCESS_TOKEN=tok
-        ut.trace(3, f"Setting access token {ACCESS_TOKEN}")
+        ut.trace(3, "Access token configured")
 
     #sets the header to be used for authentication and data format to be sent.
     def setHeaders(self):
-        ut.trace(3, f"access token is {ACCESS_TOKEN}")
         spark_header = {'Authorization': f"Bearer {ACCESS_TOKEN}", 'Content-Type': 'application/json; charset=utf-8'}
         return(spark_header)
 
@@ -182,7 +182,7 @@ class WbxRequest:
         uid = self.get_user_id(ue, True)
         frm = datetime.datetime.now(timezone.utc) - datetime.timedelta(30)
         frmiso = frm.isoformat(timespec='milliseconds')
-        utcFrm = re.sub('\+.+','', frmiso) + 'Z' # remove the tz suffix 
+        utcFrm = re.sub(r'\+.+', '', frmiso) + 'Z' # remove the tz suffix
 
         to = UTCNOW
         opts = {'max': 100,'from':utcFrm,'to':to}
@@ -233,7 +233,7 @@ class WbxRequest:
         uid = self.get_user_id(ue, True)
         frm = datetime.datetime.now(timezone.utc) - datetime.timedelta(30)
         frmiso = frm.isoformat(timespec='milliseconds')
-        utcFrm = re.sub('\+.+','', frmiso) + 'Z' # remove the tz suffix 
+        utcFrm = re.sub(r'\+.+', '', frmiso) + 'Z' # remove the tz suffix
 
         to = UTCNOW
         opts = {'max': 100,'from':utcFrm,'to':to}
@@ -292,7 +292,7 @@ class WbxRequest:
             
         frm = datetime.datetime.now(timezone.utc) - datetime.timedelta(30)
         frmiso = frm.isoformat(timespec='milliseconds')
-        utcFrm = re.sub('\+.+','', frmiso) + 'Z' # remove the tz suffix 
+        utcFrm = re.sub(r'\+.+', '', frmiso) + 'Z' # remove the tz suffix
 
         to = UTCNOW
         opts = {'max': 100,'from':utcFrm,'to':to}
@@ -318,3 +318,68 @@ class WbxRequest:
         meetings=self.get_events(params)
 
         return(meetings)
+
+    # Returns upcoming scheduled meetings for the organization (or one host).
+    # Webex models a non-recurring meeting as a meetingSeries with one
+    # occurrence, so query both meetingSeries and scheduledMeeting objects.
+    # Organization-wide access requires meeting:admin_schedule_read.
+    def get_scheduled_meetings(self, host_email="", user_opts=""):
+        now = datetime.datetime.now(timezone.utc)
+        now_iso = now.isoformat(timespec='milliseconds')
+        utc_now = re.sub(r'\+.+', '', now_iso) + 'Z'
+        base_opts = {'max': 100, 'from': utc_now}
+
+        if user_opts:
+            try:
+                user_opts_dict = json.loads(user_opts)
+                if not isinstance(user_opts_dict, dict):
+                    raise ValueError('filter must be a JSON object')
+                base_opts.update(user_opts_dict)
+            except (TypeError, ValueError):
+                ut.trace(1, f"error parsing {user_opts} not a valid JSON object")
+
+        if host_email:
+            base_opts['hostEmail'] = host_email
+
+        # Webex defaults `to` to seven days after `from`. `current=true`
+        # makes a recurring meeting series report its next occurrence.
+        queries = []
+        for meeting_type, default_state in (
+            ('scheduledMeeting', 'scheduled'),
+            ('meetingSeries', 'active'),
+        ):
+            opts = dict(base_opts)
+            opts['meetingType'] = meeting_type
+            opts.setdefault('state', default_state)
+            if meeting_type == 'meetingSeries':
+                opts['current'] = 'true'
+            queries.append(opts)
+
+        items_by_occurrence = {}
+        for opts in queries:
+            url = 'https://webexapis.com/v1/meetings?' + urllib.parse.urlencode(opts)
+            while url:
+                ut.trace(3, f"get scheduled meetings {url}")
+                try:
+                    response = requests.get(url, headers=self.setHeaders())
+                    if response.status_code != 200:
+                        ut.trace(1, f"error {url} {response.status_code}: {response.reason}")
+                        return({})
+                    for item in response.json().get('items', []):
+                        # Prefer the occurrence object if Webex returns both
+                        # that object and its meetingSeries for the same time.
+                        series_id = item.get('meetingSeriesId') or item.get('id')
+                        occurrence_key = (series_id, item.get('start'))
+                        existing = items_by_occurrence.get(occurrence_key)
+                        if existing is None or item.get('meetingType') == 'scheduledMeeting':
+                            items_by_occurrence[occurrence_key] = item
+                    next_page = re.search(
+                        r'<([^>]+)>;\s*rel="?next"?',
+                        response.headers.get('Link', '')
+                    )
+                    url = urllib.parse.urljoin(url, next_page.group(1)) if next_page else ''
+                except requests.exceptions.RequestException as e:
+                    ut.trace(1, f"error {e}")
+                    return({})
+
+        return({'items': list(items_by_occurrence.values())})

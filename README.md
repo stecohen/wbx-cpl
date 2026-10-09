@@ -20,10 +20,19 @@ Commands:
   recording
 ```
 
+Set `AUTH_BEARER` in the environment to provide the Webex access token.
+
 # Examples:
 ```
 # MEETING
 # -------
+
+# List my own scheduled meetings
+python3 -m wbx_cpl meeting list
+
+# List a user's scheduled meetings (requires `meeting:admin_schedule_read`)
+python3 -m wbx_cpl meeting list --host-email Alex@example.com
+
 # List messages sent in any meeting in Feb 2024 by given user email.
 # python3 -m wbx_cpl meeting user_messages -f '{"from":"2024-02-01T00:00:00.000Z","to":"2024-02-29T20:26:59.814Z"} bc@4bfzj5.onmicrosoft.com
 
@@ -74,3 +83,9 @@ Commands:
 
 ## Notes:
 - the --filter option follows the input parameters of [Webex Events End Point](https://developer.webex.com/docs/api/v1/events/list-events)
+
+## List meetings
+
+`meeting list` shows ended meetings from the last 30 days and scheduled meetings
+from the next seven days by default. Use `--host-email` (or `--email`) to filter
+by host, and `--past-only` to omit scheduled meetings.

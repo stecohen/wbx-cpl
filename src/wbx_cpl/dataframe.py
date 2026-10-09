@@ -312,7 +312,10 @@ class meetingDF:
 class meetingsDF:
 
     datafile="meeting_list.json"
-    cols = {'meetingId':[], 'title':[], 'created':[],}
+    cols = {
+        'meetingId': [], 'title': [], 'created': [], 'start': [], 'end': [],
+        'state': [], 'hostEmail': [], 'meetingType': [],
+    }
 
     def __init__(self):
         mycols=self.cols
@@ -337,7 +340,9 @@ class meetingsDF:
     # print to screen and file if option on 
     #
     def print(self, csvdest):
-        df = self.df.sort_values(by=['created'])
+        df = self.df.copy()
+        df['_sortDate'] = df['start'].replace('', pd.NA).fillna(df['created'])
+        df = df.sort_values(by=['_sortDate'], na_position='last').drop(columns=['_sortDate'])
         print(df.loc[:, ~df.columns.isin([''])])
         if csvdest:
             df.to_csv(csvdest, index=False)
@@ -345,10 +350,42 @@ class meetingsDF:
 
     # pull from events, store and displays 
     #
-    def list_meetings(self, email, csvdest, userOpts=""):
-        meeting_list = wbxr.get_meeting_events(email, userOpts)
-        if (meeting_list) :
-            self.df=update_df_data(self.df, meeting_list, self.cols)
+    def list_meetings(self, email, csvdest, userOpts="", include_future=True):
+        ended_meetings = wbxr.get_meeting_events(email, userOpts)
+        scheduled_meetings = (
+            wbxr.get_scheduled_meetings(email, userOpts) if include_future else {}
+        )
+        rows = []
+
+        if isinstance(ended_meetings, dict):
+            for item in ended_meetings.get('items', []):
+                data = item.get('data', {})
+                rows.append({
+                    'meetingId': data.get('meetingId', data.get('id', '')),
+                    'title': data.get('title', ''),
+                    'created': data.get('created', ''),
+                    'start': data.get('start', ''),
+                    'end': data.get('end', ''),
+                    'state': data.get('state', 'ended'),
+                    'hostEmail': data.get('hostEmail', ''),
+                    'meetingType': data.get('meetingType', ''),
+                })
+
+        if isinstance(scheduled_meetings, dict):
+            for item in scheduled_meetings.get('items', []):
+                rows.append({
+                    'meetingId': item.get('id', item.get('meetingId', '')),
+                    'title': item.get('title', ''),
+                    'created': '',
+                    'start': item.get('start', ''),
+                    'end': item.get('end', ''),
+                    'state': item.get('state', 'scheduled'),
+                    'hostEmail': item.get('hostEmail', ''),
+                    'meetingType': item.get('meetingType', ''),
+                })
+
+        if rows:
+            self.df = pd.DataFrame(rows, columns=self.cols.keys())
             self.print(csvdest)
         else :  
             print("Error")
@@ -386,5 +423,4 @@ class usersDF:
         except Exception as e: 
             print(e)
             exit(-1)
-        print(self.df)        
-        
+        print(self.df)
